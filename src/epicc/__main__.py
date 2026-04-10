@@ -203,12 +203,17 @@ def _render_python_parameter_inputs(
     )
 
     if uploaded_params:
-        upload_bytes = uploaded_params.getvalue()
-        upload_hash = hashlib.sha1(upload_bytes).hexdigest()
+        cheap_id = (uploaded_params.name, uploaded_params.size)
+        cached = st.session_state.get("_upload_hash_cache")
+        if cached is not None and cached[0] == cheap_id:
+            upload_hash = cached[1]
+        else:
+            upload_hash = hashlib.sha1(uploaded_params.getvalue()).hexdigest()
+            st.session_state["_upload_hash_cache"] = (cheap_id, upload_hash)
         param_identity = (
             "upload",
             uploaded_params.name,
-            len(upload_bytes),
+            uploaded_params.size,
             upload_hash,
         )
     else:
