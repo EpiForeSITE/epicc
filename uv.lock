@@ -166,7 +166,7 @@ wheels = [
 ]
 
 [[package]]
-name = "epiworld-python-streamlit"
+name = "epicc"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
