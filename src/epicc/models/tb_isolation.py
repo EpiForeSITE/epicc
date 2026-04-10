@@ -72,7 +72,7 @@ class TBIsolationParams(BaseModel):
     remaining_years_of_life: int = Field(alias="Remaining years of life", ge=0)
 
 
-class TBIsolationModel(BaseSimulationModel):
+class TBIsolationModel(BaseSimulationModel[TBIsolationParams]):
     def human_name(self) -> str:
         return "TB Isolation"
 
@@ -99,7 +99,7 @@ class TBIsolationModel(BaseSimulationModel):
         ):
             return dict(YAML().load(f))
 
-    def parameter_model(self) -> type[BaseModel]:
+    def parameter_model(self) -> type[TBIsolationParams]:
         return TBIsolationParams
 
     def run(

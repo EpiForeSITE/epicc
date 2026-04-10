@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
+ParamsT = TypeVar("ParamsT", bound=BaseModel)
 
-class BaseSimulationModel(ABC):
+
+class BaseSimulationModel(ABC, Generic[ParamsT]):
     """Abstract contract for Python-defined simulation models."""
 
     @abstractmethod
@@ -31,7 +33,7 @@ class BaseSimulationModel(ABC):
     @abstractmethod
     def run(
         self,
-        params: BaseModel,
+        params: ParamsT,
         label_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run the model and return result payload for rendering."""
@@ -41,7 +43,7 @@ class BaseSimulationModel(ABC):
         """Return the model's default parameters as a raw (unflattened) dict."""
 
     @abstractmethod
-    def parameter_model(self) -> type[BaseModel]:
+    def parameter_model(self) -> type[ParamsT]:
         """Return a Pydantic model used to validate uploaded parameter files."""
 
     @abstractmethod

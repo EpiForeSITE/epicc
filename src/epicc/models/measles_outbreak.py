@@ -37,7 +37,7 @@ class MeaslesOutbreakParams(BaseModel):
     quarantine_days: int = Field(alias="Length of quarantine (days)", ge=0)
 
 
-class MeaslesOutbreakModel(BaseSimulationModel):
+class MeaslesOutbreakModel(BaseSimulationModel[MeaslesOutbreakParams]):
     def human_name(self) -> str:
         return "Measles Outbreak"
 
@@ -65,7 +65,7 @@ class MeaslesOutbreakModel(BaseSimulationModel):
         ):
             return dict(YAML().load(f))
 
-    def parameter_model(self) -> type[BaseModel]:
+    def parameter_model(self) -> type[MeaslesOutbreakParams]:
         return MeaslesOutbreakParams
 
     def run(
