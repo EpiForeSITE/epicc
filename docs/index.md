@@ -1,4 +1,4 @@
-# epiworldPythonStreamlit
+# epicc
 
 ## Launch the App
 

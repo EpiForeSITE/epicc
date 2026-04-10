@@ -413,7 +413,7 @@ def _run_python_simulation(
 
 _load_styles()
 
-st.sidebar.title("EpiCON Cost Calculator")
+st.sidebar.title("epicc Cost Calculator")
 st.sidebar.header("Simulation Controls")
 
 built_in_models = get_built_in_models()

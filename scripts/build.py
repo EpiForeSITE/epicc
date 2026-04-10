@@ -204,12 +204,12 @@ def build_loader_html(
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="EpiCON" />
+    <meta name="apple-mobile-web-app-title" content="epicc" />
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content="{title_html}" />
     <meta property="og:description" content="Calculate and analyze epidemiological costs" />
-    <meta property="og:url" content="https://epiForeSITE.github.io/epiworldPythonStreamlit" />
+    <meta property="og:url" content="https://epiForeSITE.github.io/epicc" />
 
     <!-- TODO: Favicon -->
     <!-- <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" /> -->

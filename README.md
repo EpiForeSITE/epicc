@@ -1,4 +1,4 @@
-# epiworldPythonStreamlit
+# epicc
 
 Streamlit webapp for epiworld.
 

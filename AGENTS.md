@@ -1,4 +1,4 @@
-# AGENTS.md — EpiCON Cost Calculator
+# AGENTS.md — epicc Cost Calculator
 
 This file describes the conventions, roles, and constraints for contributors working in this
 repository. All agents — whether running in GitHub Actions or invoked interactively — should
@@ -8,7 +8,7 @@ read and follow this document before making changes.
 
 ## Project overview
 
-**EpiCON** is a browser-based epidemiological cost calculator built with **Streamlit** and
+**epicc** is a browser-based epidemiological cost calculator built with **Streamlit** and
 distributed as a static **stlite** build for browser execution.
 
 The current app supports two model flows:

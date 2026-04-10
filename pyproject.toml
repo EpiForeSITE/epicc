@@ -1,5 +1,5 @@
 [project]
-name = "epiworld-python-streamlit"
+name = "epicc"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -30,7 +30,7 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [tool.stlite]
-title = "EpiCON Cost Calculator"
+title = "epicc Cost Calculator"
 mount_dirs = ["src"]
 text_suffixes = [".py", ".yaml", ".yml", ".css", ".js", ".html"]
 css_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.css"
