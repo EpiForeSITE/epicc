@@ -1,7 +1,7 @@
 """
 DEPRECATED, remove as per #26, "Remove XLSX Model Specification Code"
 
-https://github.com/EpiForeSITE/epiworldPythonStreamlit/issues/26
+https://github.com/EpiForeSITE/epicc/issues/26
 """
 
 from __future__ import annotations

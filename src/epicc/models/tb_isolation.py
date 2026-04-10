@@ -3,12 +3,73 @@ from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from typing import Any
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
 from ruamel.yaml import YAML
 
 from epicc.model.base import BaseSimulationModel
 
 
-class TBIsolationModel(BaseSimulationModel):
+class TBProgressionParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    first_2_years: float = Field(
+        alias="First 2 years (prob_latent_to_active_2yr)", ge=0.0, le=1.0
+    )
+    rest_of_lifetime: float = Field(
+        alias="Rest of lifetime (prob_latent_to_active_lifetime)", ge=0.0, le=1.0
+    )
+
+
+class TBCostParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    cost_latent: float = Field(
+        alias="Cost of latent TB infection (cost_latent)", ge=0.0
+    )
+    cost_active: float = Field(
+        alias="Cost of active TB infection (cost_active)", ge=0.0
+    )
+    isolation_type: int = Field(
+        alias="Isolation type (1=hospital,2=motel,3=home)", ge=1, le=3
+    )
+    isolation_cost: float = Field(alias="Daily isolation cost (isolation_cost)", ge=0.0)
+    direct_medical_cost_day: float = Field(
+        alias="Direct medical cost of a day of isolation", ge=0.0
+    )
+    motel_room_cost: float = Field(alias="Cost of motel room per day", ge=0.0)
+    hourly_wage_worker: float = Field(alias="Hourly wage for worker", ge=0.0)
+    hourly_wage_nurse: float = Field(alias="Hourly wage for nurse", ge=0.0)
+    nurse_checkin_hours: float = Field(
+        alias="Time for nurse to check in w/ pt in motel or home (hrs)", ge=0.0
+    )
+
+
+class TBIsolationParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    contacts_per_case: float = Field(
+        alias="Number of contacts for each released TB case", ge=0.0
+    )
+    prob_latent_if_14_day: float = Field(
+        alias="Probability that contact develops latent TB if 14-day isolation",
+        ge=0.0,
+        le=1.0,
+    )
+    infectiousness_multiplier: float = Field(
+        alias="Multiplier for infectiousness with 5-day vs. 14-day isolation", ge=0.0
+    )
+    workday_ratio: float = Field(
+        alias="Ratio of workdays to total days", ge=0.0, le=1.0
+    )
+    progression: TBProgressionParams = Field(
+        alias="Probability of transitioning from latent to active TB"
+    )
+    costs: TBCostParams = Field(alias="Costs")
+    discount_rate: float = Field(alias="Discount rate", ge=0.0)
+    remaining_years_of_life: int = Field(alias="Remaining years of life", ge=0)
+
+
+class TBIsolationModel(BaseSimulationModel[TBIsolationParams]):
     def human_name(self) -> str:
         return "TB Isolation"
 
@@ -35,9 +96,12 @@ class TBIsolationModel(BaseSimulationModel):
         ):
             return dict(YAML().load(f))
 
+    def parameter_model(self) -> type[TBIsolationParams]:
+        return TBIsolationParams
+
     def run(
         self,
-        params: dict[str, Any],
+        params: TBIsolationParams,
         label_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         getcontext().prec = 28
@@ -58,58 +122,30 @@ class TBIsolationModel(BaseSimulationModel):
         def q2n(x: Decimal) -> Decimal:
             return x.quantize(cent, rounding=ROUND_HALF_EVEN)
 
-        def getp(default: float | int, *names: str) -> Decimal:
-            normalized_params = {k.lower(): v for k, v in params.items()}
+        contacts_per_case = Decimal(str(params.contacts_per_case))
+        prob_latent_if_14day = Decimal(str(params.prob_latent_if_14_day))
+        infectiousness_multiplier = Decimal(str(params.infectiousness_multiplier))
+        workday_ratio = Decimal(str(params.workday_ratio))
 
-            for n in names:
-                n_lower = n.lower()
-
-                if n_lower in normalized_params and normalized_params[n_lower] != "":
-                    return Decimal(str(normalized_params[n_lower]))
-
-                for key, val in normalized_params.items():
-                    if f"({n_lower})" in key and val != "":
-                        return Decimal(str(val))
-            return Decimal(str(default))
-
-        contacts_per_case = getp(0, "Number of contacts for each released TB case")
-        prob_latent_if_14day = getp(
-            0,
-            "Probability that contact develops latent TB if 14-day isolation",
-        )
-        infectiousness_multiplier = getp(
-            1.5,
-            "Multiplier for infectiousness with 5-day vs. 14-day isolation",
-        )
-        workday_ratio = getp(0.714, "Ratio of workdays to total days")
-
-        prob_latent_to_active_2yr = getp(
-            0, "prob_latent_to_active_2yr", "First 2 years"
-        )
-        prob_latent_to_active_lifetime = getp(
-            0,
-            "prob_latent_to_active_lifetime",
-            "Rest of lifetime",
+        prob_latent_to_active_2yr = Decimal(str(params.progression.first_2_years))
+        prob_latent_to_active_lifetime = Decimal(
+            str(params.progression.rest_of_lifetime)
         )
 
-        cost_latent = getp(0, "cost_latent", "Cost of latent TB infection")
-        cost_active = getp(0, "cost_active", "Cost of active TB infection")
+        cost_latent = Decimal(str(params.costs.cost_latent))
+        cost_active = Decimal(str(params.costs.cost_active))
 
-        isolation_type = int(
-            getp(3, "isolation_type", "Isolation type (1=hospital,2=motel,3=home)")
-        )
-        daily_hosp_cost = getp(0, "isolation_cost", "Daily isolation cost")
-        direct_med_cost_day = getp(0, "Direct medical cost of a day of isolation")
+        isolation_type = int(params.costs.isolation_type)
+        daily_hosp_cost = Decimal(str(params.costs.isolation_cost))
+        direct_med_cost_day = Decimal(str(params.costs.direct_medical_cost_day))
 
-        cost_motel_room = getp(0, "Cost of motel room per day")
-        hourly_wage_nurse = getp(0, "Hourly wage for nurse")
-        time_nurse_checkin = getp(
-            0, "Time for nurse to check in w/ pt in motel or home (hrs)"
-        )
-        hourly_wage_worker = getp(0, "Hourly wage for worker")
+        cost_motel_room = Decimal(str(params.costs.motel_room_cost))
+        hourly_wage_nurse = Decimal(str(params.costs.hourly_wage_nurse))
+        time_nurse_checkin = Decimal(str(params.costs.nurse_checkin_hours))
+        hourly_wage_worker = Decimal(str(params.costs.hourly_wage_worker))
 
-        discount_rate = getp(0, "discount_rate", "Discount rate")
-        remaining_years = int(getp(40, "remaining_years", "Remaining years of life"))
+        discount_rate = Decimal(str(params.discount_rate))
+        remaining_years = int(params.remaining_years_of_life)
 
         if isolation_type == 1:
             daily_cost = (

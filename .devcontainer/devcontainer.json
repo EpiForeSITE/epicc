@@ -1,6 +1,6 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "epiworldPythonStreamlit Dev Container",
+	"name": "epicc Dev Container",
 	"remoteUser": "dev",
 	"build": {
 		"dockerfile": "../Containerfile",

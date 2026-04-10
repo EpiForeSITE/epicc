@@ -5,16 +5,13 @@ on:
 
 permissions:
   contents: read
-  packages: read
+
+# TODO: This should, at some point, use the container image built by the other workflows.
+#  Not sure how to do that though.
 
 jobs:
   copilot:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/epiforesite/epiworldpythonstreamlit:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -22,21 +19,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Sync dependencies
-        run: uv sync --frozen --group dev --no-install-project
-
-      - name: Install development dependencies and tools
+      - name: Install system dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y \
+            build-essential \
+            pkg-config \
             git \
             vim \
             nano \
             curl \
             wget
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --frozen --group dev --no-install-project
+
       - name: Verify development environment
         run: |
           echo "Development environment ready for GitHub Copilot"
-          echo "Python version: $(python --version)"
+          echo "Python version: $(uv run python --version)"
           echo "uv version: $(uv --version)"
           uv pip list

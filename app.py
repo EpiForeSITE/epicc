@@ -1,9 +1,3 @@
-"""Top-level Streamlit entrypoint.
-
-This shim makes the app runnable from the repository root without requiring
-manual PYTHONPATH tweaks.
-"""
-
 import sys
 from pathlib import Path
 

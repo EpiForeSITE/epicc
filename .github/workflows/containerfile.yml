@@ -4,15 +4,12 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'Containerfile'
-      - 'pyproject.toml'
-      - 'uv.lock'
+
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: epiforesite/epiworldpythonstreamlit
+  IMAGE_NAME: epiforesite/epicc
 
 jobs:
   build-and-push:

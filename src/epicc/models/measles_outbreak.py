@@ -3,12 +3,41 @@ from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from typing import Any
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
 from ruamel.yaml import YAML
 
 from epicc.model.base import BaseSimulationModel
 
 
-class MeaslesOutbreakModel(BaseSimulationModel):
+class MeaslesOutbreakParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    cost_measles_hospitalization: float = Field(
+        alias="Cost of measles hospitalization", ge=0.0
+    )
+    proportion_hospitalized: float = Field(
+        alias="Proportion of cases hospitalized", ge=0.0, le=1.0
+    )
+    proportion_missed_workdays: float = Field(
+        alias="Proportion of quarantine days that would be a missed day of work",
+        ge=0.0,
+        le=1.0,
+    )
+    hourly_wage_worker: float = Field(alias="Hourly wage for worker", ge=0.0)
+    hourly_wage_contract_tracer: float = Field(
+        alias="Hourly wage for contract tracer", ge=0.0
+    )
+    hours_contact_tracing_per_contact: float = Field(
+        alias="Hours of contact tracing per contact", ge=0.0
+    )
+    contacts_per_case: float = Field(alias="Number of contacts per case", ge=0.0)
+    vaccination_rate: float = Field(
+        alias="Vaccination rate in community", ge=0.0, le=1.0
+    )
+    quarantine_days: int = Field(alias="Length of quarantine (days)", ge=0)
+
+
+class MeaslesOutbreakModel(BaseSimulationModel[MeaslesOutbreakParams]):
     def human_name(self) -> str:
         return "Measles Outbreak"
 
@@ -36,9 +65,12 @@ class MeaslesOutbreakModel(BaseSimulationModel):
         ):
             return dict(YAML().load(f))
 
+    def parameter_model(self) -> type[MeaslesOutbreakParams]:
+        return MeaslesOutbreakParams
+
     def run(
         self,
-        params: dict[str, Any],
+        params: MeaslesOutbreakParams,
         label_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         getcontext().prec = 28
@@ -57,31 +89,15 @@ class MeaslesOutbreakModel(BaseSimulationModel):
                 return x.quantize(one, rounding=ROUND_HALF_EVEN)
             return x.quantize(cent, rounding=ROUND_HALF_EVEN)
 
-        def getp(default: float | int, *names: str) -> Decimal:
-            for n in names:
-                if n in params and params[n] != "":
-                    try:
-                        return Decimal(str(params[n]))
-                    except Exception:
-                        pass
-            return Decimal(str(default))
-
-        cost_hosp = getp(0, "Cost of measles hospitalization")
-        prop_hosp = getp(0, "Proportion of cases hospitalized")
-        missed_ratio = getp(
-            1.0,
-            "Proportion of quarantine days that would be a missed day of work",
-        )
-        wage_worker = getp(
-            0,
-            "Hourly wage of worker (hourly_wage_worker)",
-            "Hourly wage for worker",
-        )
-        wage_tracer = getp(0, "Hourly wage for contract tracer")
-        hrs_tracing = getp(0, "Hours of contact tracing per contact")
-        contacts = getp(0, "Number of contacts per case")
-        vacc_rate = getp(0, "Vaccination rate in community")
-        quarantine = int(getp(21, "Length of quarantine (days)"))
+        cost_hosp = Decimal(str(params.cost_measles_hospitalization))
+        prop_hosp = Decimal(str(params.proportion_hospitalized))
+        missed_ratio = Decimal(str(params.proportion_missed_workdays))
+        wage_worker = Decimal(str(params.hourly_wage_worker))
+        wage_tracer = Decimal(str(params.hourly_wage_contract_tracer))
+        hrs_tracing = Decimal(str(params.hours_contact_tracing_per_contact))
+        contacts = Decimal(str(params.contacts_per_case))
+        vacc_rate = Decimal(str(params.vaccination_rate))
+        quarantine = int(params.quarantine_days)
 
         hosp_22 = q2(22 * prop_hosp * cost_hosp)
         hosp_100 = q2(100 * prop_hosp * cost_hosp)

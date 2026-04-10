@@ -81,9 +81,6 @@ class YAMLFormat(BaseFormat[CommentedMap]):
         return self.write(model.model_dump())
 
 
-__all__ = ["YAMLFormat"]
-
-
 def _merge_mapping(target: CommentedMap, updates: dict[str, Any]) -> None:
     """Recursively merge plain updates into a CommentedMap template."""
     for key, value in updates.items():
@@ -91,3 +88,6 @@ def _merge_mapping(target: CommentedMap, updates: dict[str, Any]) -> None:
             _merge_mapping(target[key], value)
         else:
             target[key] = value
+
+
+__all__ = ["YAMLFormat"]

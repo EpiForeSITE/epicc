@@ -26,3 +26,56 @@
     margin-left: 15px;
 }
 
+/* Results export hint shown on screen only */
+.export-hint {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid #0ea5e9;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-size: 0.9rem;
+}
+
+/* Print rules to hide controls/chrome and keep the rendered results visible */
+@media print {
+    @page {
+        margin: 0.5in;
+    }
+
+    [data-testid="stSidebar"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    [data-testid="collapsedControl"],
+    header,
+    footer,
+    #MainMenu,
+    .no-print,
+    .export-hint {
+        display: none !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        max-width: 100% !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    .section-divider {
+        page-break-after: auto;
+    }
+
+    h1,
+    h2,
+    h3,
+    table,
+    .stMarkdown,
+    .stTable {
+        break-inside: avoid;
+    }
+}

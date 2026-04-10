@@ -3,14 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import IO, Any
 
-from pydantic import RootModel
+from pydantic import BaseModel
 
-from epicc.formats import read_from_format
+from epicc.formats import get_format
 from epicc.model.base import BaseSimulationModel
-
-
-class OpaqueParameters(RootModel[dict[str, Any]]):
-    """Minimal typed envelope for opaque parameter payloads."""
 
 
 def flatten_dict(data: dict[str, Any], level: int = 0) -> dict[str, Any]:
@@ -29,9 +25,13 @@ def flatten_dict(data: dict[str, Any], level: int = 0) -> dict[str, Any]:
     return flat
 
 
-def _load_typed_params(path: Path, data: IO[bytes]) -> dict[str, Any]:
-    typed, _ = read_from_format(path, data, OpaqueParameters)
-    return typed.root
+def _load_typed_params(
+    path: Path, data: IO[bytes], model: type[BaseModel]
+) -> dict[str, Any]:
+    reader = get_format(path)
+    opaque, _ = reader.read(data)
+    typed = model.model_validate(opaque)
+    return typed.model_dump(by_alias=True)
 
 
 def load_model_params(
@@ -45,6 +45,12 @@ def load_model_params(
         if not uploaded_name:
             raise ValueError("Uploaded parameter files must include a filename.")
         uploaded_params.seek(0)
-        return flatten_dict(_load_typed_params(Path(uploaded_name), uploaded_params))
+        return flatten_dict(
+            _load_typed_params(
+                Path(uploaded_name),
+                uploaded_params,
+                model.parameter_model(),
+            )
+        )
 
     return flatten_dict(model.default_params())

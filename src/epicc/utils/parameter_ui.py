@@ -3,7 +3,7 @@ from typing import Any
 import streamlit as st
 
 
-def _item_level(key: str) -> int:
+def item_level(key: str) -> int:
     return len(key) - len(key.lstrip("\t"))
 
 
@@ -26,7 +26,7 @@ def reset_parameters_to_defaults(
 
     while i < n:
         key, value = items[i]
-        level = _item_level(key)
+        level = item_level(key)
         label = key.strip()
 
         if value is not None:
@@ -37,7 +37,7 @@ def reset_parameters_to_defaults(
         j = i + 1
         while j < n:
             subkey, subval = items[j]
-            sublevel = _item_level(subkey)
+            sublevel = item_level(subkey)
             if sublevel <= level:
                 break
             if sublevel == level + 1 and subval is not None:
@@ -64,7 +64,7 @@ def render_parameters_with_indent(
 
     while i < n:
         key, value = items[i]
-        level = _item_level(key)
+        level = item_level(key)
         label = key.strip()
 
         if value is not None:
@@ -86,7 +86,7 @@ def render_parameters_with_indent(
         j = i + 1
         while j < n:
             subkey, subval = items[j]
-            sublevel = _item_level(subkey)
+            sublevel = item_level(subkey)
             if sublevel <= level:
                 break
             if sublevel == level + 1 and subval is not None:
