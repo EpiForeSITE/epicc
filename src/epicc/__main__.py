@@ -9,11 +9,6 @@ from pydantic import BaseModel, ValidationError
 from epicc.config import CONFIG
 from epicc.formats import VALID_PARAMETER_SUFFIXES
 from epicc.model.base import BaseSimulationModel
-from epicc.utils.excel_model_runner import (
-    get_scenario_headers,
-    load_excel_params_defaults_with_computed,
-    run_excel_driven_model,
-)
 from epicc.utils.model_loader import get_built_in_models
 from epicc.utils.parameter_loader import load_model_params
 from epicc.utils.parameter_ui import (
@@ -121,70 +116,6 @@ def _render_results_panel(results_payload: dict[str, Any]) -> None:
     st.title(results_payload.get("title", CONFIG.app.title))
     st.write(results_payload.get("description", ""))
     render_sections(results_payload.get("sections", []))
-
-
-def _render_excel_parameter_inputs(
-    params: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, str]]:
-    label_overrides: dict[str, str] = {}
-
-    uploaded_excel_model = st.sidebar.file_uploader(
-        "Upload Excel model file (.xlsx)", type=["xlsx"], key="excel_model_uploader"
-    )
-    if not uploaded_excel_model:
-        st.sidebar.info("Upload an Excel model file to edit parameters.")
-        return params, label_overrides
-
-    upload_bytes = uploaded_excel_model.getvalue()
-    upload_hash = hashlib.sha1(upload_bytes).hexdigest()
-    excel_identity = (uploaded_excel_model.name, len(upload_bytes), upload_hash)
-    should_refresh_params = False
-    if st.session_state.get("excel_active_identity") != excel_identity:
-        st.session_state.excel_active_identity = excel_identity
-        st.session_state.params = {}
-        clear_export_state()
-        params = st.session_state.params
-        should_refresh_params = True
-
-    uploaded_excel_name = uploaded_excel_model.name
-
-    editable_defaults, _ = load_excel_params_defaults_with_computed(
-        uploaded_excel_model, sheet_name=None, start_row=3
-    )
-    current_headers = get_scenario_headers(uploaded_excel_model)
-
-    def handle_reset_excel() -> None:
-        reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_name)
-        for col_letter, default_text in current_headers.items():
-            st.session_state[f"label_override_{col_letter}"] = default_text
-
-    if should_refresh_params:
-        handle_reset_excel()
-
-    st.sidebar.button("Reset Parameters", on_click=handle_reset_excel)
-
-    if current_headers:
-        with st.sidebar.expander("Output Scenario Headers", expanded=False):
-            st.caption("Rename the output headers (B, C, D, E)")
-            for col_letter in sorted(current_headers.keys()):
-                default_text = current_headers[col_letter]
-                widget_key = f"label_override_{col_letter}"
-                if widget_key in st.session_state:
-                    label_overrides[col_letter] = st.text_input(
-                        f"Column {col_letter} Label", key=widget_key
-                    )
-                    continue
-
-                label_overrides[col_letter] = st.text_input(
-                    f"Column {col_letter} Label",
-                    value=default_text,
-                    key=widget_key,
-                )
-
-    render_parameters_with_indent(
-        editable_defaults, params, model_id=uploaded_excel_name
-    )
-    return params, label_overrides
 
 
 def _render_python_parameter_inputs(
@@ -367,29 +298,6 @@ def _render_validation_error_details(
         )
 
 
-def _run_excel_simulation(
-    params: dict[str, Any], label_overrides: dict[str, str]
-) -> dict[str, Any] | None:
-    uploaded_excel_model = st.session_state.get("excel_model_uploader")
-    if not uploaded_excel_model:
-        st.error("Please upload an Excel model file first.")
-        return None
-
-    with st.spinner(f"Running Excel-driven model: {uploaded_excel_model.name}..."):
-        results = run_excel_driven_model(
-            excel_file=uploaded_excel_model,
-            filename=uploaded_excel_model.name,
-            params=params,
-            sheet_name=None,
-            label_overrides=label_overrides,
-        )
-        return {
-            "title": results.get("model_title", "Excel Driven Model"),
-            "description": results.get("model_description", ""),
-            "sections": results.get("sections", []),
-        }
-
-
 def _run_python_simulation(
     selected_label: str,
     model: BaseSimulationModel,
@@ -420,10 +328,9 @@ built_in_models = get_built_in_models()
 model_registry: dict[str, BaseSimulationModel] = {
     m.human_name(): m for m in built_in_models
 }
-model_labels = [*model_registry.keys(), "Excel Driven Model"]
+model_labels = list(model_registry.keys())
 
 selected_label = st.sidebar.selectbox("Select Model", model_labels, index=0)
-is_excel_model = selected_label == "Excel Driven Model"
 model_key = selected_label
 
 params = _sync_active_model(model_key)
@@ -434,49 +341,40 @@ st.sidebar.subheader("Input Parameters")
 has_input_errors = False
 typed_params: BaseModel | None = None
 
-if is_excel_model:
-    params, label_overrides = _render_excel_parameter_inputs(params)
-    model_defaults_flat: dict[str, Any] = {}
-else:
-    params, label_overrides, model_defaults_flat, has_input_errors = (
-        _render_python_parameter_inputs(
-            model_registry[selected_label],
-            model_key,
-            params,
-        )
+params, label_overrides, model_defaults_flat, has_input_errors = (
+    _render_python_parameter_inputs(
+        model_registry[selected_label],
+        model_key,
+        params,
     )
+)
 
-    if not has_input_errors:
-        try:
-            typed_params = _build_typed_params(
-                model_registry[selected_label], model_defaults_flat, params
-            )
-        except ValidationError as exc:
-            _render_validation_error_details(selected_label, exc, sidebar=True)
-            has_input_errors = True
+if not has_input_errors:
+    try:
+        typed_params = _build_typed_params(
+            model_registry[selected_label], model_defaults_flat, params
+        )
+    except ValidationError as exc:
+        _render_validation_error_details(selected_label, exc, sidebar=True)
+        has_input_errors = True
 
 run_clicked = st.sidebar.button("Run Simulation", disabled=has_input_errors)
 render_export_button()
 
-# For Excel models typed_params is never set (not needed by that path).
-# Only block execution for Python models when parameter validation has failed.
-if not is_excel_model and typed_params is None:
+if typed_params is None:
     st.error("Cannot run simulation until parameter validation errors are fixed.")
     st.stop()
 
 if run_clicked:
-    if is_excel_model:
-        set_results_payload(_run_excel_simulation(params, label_overrides))
-    else:
-        assert typed_params is not None  # guaranteed by the st.stop() guard above
-        set_results_payload(
-            _run_python_simulation(
-                selected_label,
-                model_registry[selected_label],
-                typed_params,
-                label_overrides,
-            )
+    assert typed_params is not None  # guaranteed by the st.stop() guard above
+    set_results_payload(
+        _run_python_simulation(
+            selected_label,
+            model_registry[selected_label],
+            typed_params,
+            label_overrides,
         )
+    )
 
     # Always rerun after a successful run so the export button reflects the new
     # state (has_results() == True) and _render_results_panel is reached below.
