@@ -9,17 +9,17 @@ from pydantic import BaseModel, ValidationError
 from epicc.config import CONFIG
 from epicc.formats import VALID_PARAMETER_SUFFIXES
 from epicc.model.base import BaseSimulationModel
-from epicc.utils.model_loader import get_built_in_models
-from epicc.utils.parameter_loader import load_model_params
-from epicc.utils.parameter_ui import (
+from epicc.model.loader import get_built_in_models
+from epicc.model.parameters import load_model_params
+from epicc.ui.parameters import (
     item_level,
     render_parameters_with_indent,
     reset_parameters_to_defaults,
 )
-from epicc.utils.section_renderer import render_sections
+from epicc.ui.sections import render_sections
 
 # ---------------------------------------------------------------------------
-# Export / print state helpers (inlined from epicc.utils.export)
+# Export / print state helpers (inlined)
 # ---------------------------------------------------------------------------
 
 RESULTS_PAYLOAD_KEY = "results_payload"

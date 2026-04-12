@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any
 
 from epicc.formats import read_from_format
+from epicc.model.loader import get_built_in_models
+from epicc.model.parameters import flatten_dict, load_model_params
 from epicc.model.schema import Model
 
 
@@ -14,4 +16,9 @@ def load_model(name: str) -> tuple[Model, Any]:
     return read_from_format(config_name, config_resource.open("rb"), Model)
 
 
-__all__ = ["load_model"]
+__all__ = [
+    "flatten_dict",
+    "get_built_in_models",
+    "load_model",
+    "load_model_params",
+]
