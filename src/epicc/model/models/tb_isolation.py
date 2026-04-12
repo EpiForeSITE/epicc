@@ -90,7 +90,7 @@ class TBIsolationModel(BaseSimulationModel[TBIsolationParams]):
 
     def default_params(self) -> dict[str, Any]:
         with (
-            importlib.resources.files("epicc.models")
+            importlib.resources.files("epicc.model.models")
             .joinpath("tb_isolation.yaml")
             .open("rb") as f
         ):
