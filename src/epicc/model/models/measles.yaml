@@ -166,30 +166,53 @@ equations:
     compute: |
       eq_hosp + eq_lost_prod + eq_tracing
 
-table:
-  scenarios:
-    - id: "22_cases"
-      label: "22 Cases"
-      vars:
-        n_cases: 22
-    - id: "100_cases"
-      label: "100 Cases"
-      vars:
-        n_cases: 100
-    - id: "803_cases"
-      label: "803 Cases"
-      vars:
-        n_cases: 803
-
-  rows:
-    - label: "Hospitalization"
-      value: "eq_hosp"
-    - label: "Lost productivity"
-      value: "eq_lost_prod"
-    - label: "Contact tracing"
-      value: "eq_tracing"
-    - label: "TOTAL"
-      value: "eq_total"
-      emphasis: "strong"
+scenarios:
+  - id: "22_cases"
+    label: "22 Cases"
+    vars:
+      n_cases: 22
+  - id: "100_cases"
+    label: "100 Cases"
+    vars:
+      n_cases: 100
+  - id: "803_cases"
+    label: "803 Cases"
+    vars:
+      n_cases: 803
 
 figures: []
+
+report:
+  - type: markdown
+    content: |
+      ## Overview
+      This calculator estimates the economic burden of measles outbreaks by modeling three
+      key cost components: direct medical costs (hospitalization), indirect costs (lost
+      productivity from quarantine), and public health response costs (contact tracing).
+
+      ## Scenarios
+      The model evaluates three outbreak scenarios based on historical U.S. measles outbreaks:
+      - **22 Cases**: Small outbreak (typical in high-vaccination areas)
+      - **100 Cases**: Medium outbreak
+      - **803 Cases**: Large outbreak (similar to 2019 U.S. outbreak)
+
+      ## Key Assumptions
+      - All costs are in USD
+      - Hospitalization rate and costs based on CDC surveillance data
+      - Contact tracing effort scales linearly with case count
+      - Lost productivity only counts quarantined unvaccinated contacts
+      - Wage figures represent average hourly earnings
+
+  - type: table
+    caption: "Estimated costs by outbreak size"
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+      - label: "TOTAL"
+        value: "eq_total"
+        emphasis: "strong"
+

@@ -187,7 +187,7 @@ class TestSectionBuilding:
         assert len(sections) > 0
 
     def test_sections_contain_dataframe(self, simple_model_def):
-        """Test that sections contain DataFrame."""
+        """Test that sections contain DataFrame via legacy table path."""
         model = create_model_instance(simple_model_def)
         param_model = model.parameter_model()
         params = param_model(unit_cost=10.0, quantity=5)
@@ -195,15 +195,10 @@ class TestSectionBuilding:
         results = model.run(params)
         sections = model.build_sections(results)
 
-        # Find DataFrame in sections
-        found_df = False
-        for section in sections:
-            for content in section.get("content", []):
-                if isinstance(content, pd.DataFrame):
-                    found_df = True
-                    break
-
-        assert found_df
+        # Legacy path: one table section with a DataFrame in "content"
+        table_sections = [s for s in sections if s.get("type") == "table"]
+        assert len(table_sections) > 0
+        assert isinstance(table_sections[0]["content"], pd.DataFrame)
 
 
 class TestErrorHandling:

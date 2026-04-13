@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
-from epicc.model.schema import Model
+from epicc.model.schema import FigureBlock, MarkdownBlock, Model, TableBlock
 
 
 class InterpretedModelParams(BaseModel):
@@ -137,7 +137,7 @@ def create_model_class(
         return model_def.description
 
     def scenario_labels(self) -> dict[str, str]:
-        return {scenario.id: scenario.label for scenario in model_def.table.scenarios}
+        return {scenario.id: scenario.label for scenario in model_def.resolved_scenarios()}
 
     def default_params(self) -> dict[str, Any]:
         return {
@@ -176,80 +176,129 @@ def create_model_class(
             param_dict[param_id] = value
 
         # Evaluate for each scenario
-        scenario_results = {}
-        for scenario in model_def.table.scenarios:
+        scenarios = model_def.resolved_scenarios()
+        scenario_results: dict[str, dict[str, Any]] = {}
+        scenario_results_by_id: dict[str, dict[str, Any]] = {}
+        for scenario in scenarios:
             # Merge params + scenario vars
             context = {**param_dict, **scenario.vars.model_dump()}
 
             # Evaluate all equations
             try:
-                results = evaluator.evaluate_all(context)
+                eq_results = evaluator.evaluate_all(context)
             except Exception as e:
                 raise RuntimeError(
                     f"Error evaluating scenario '{scenario.label}': {e}"
                 ) from e
 
-            # Store with label
             label = label_overrides.get(scenario.id, scenario.label)
-            scenario_results[label] = results
+            scenario_results[label] = eq_results
+            scenario_results_by_id[scenario.id] = eq_results
+
+        # Legacy rows (from table: or None)
+        legacy_rows = model_def.table.rows if model_def.table is not None else []
 
         return {
             "scenario_results": scenario_results,
-            "scenarios": model_def.table.scenarios,
-            "rows": model_def.table.rows,
+            "scenario_results_by_id": scenario_results_by_id,
+            "scenarios": scenarios,
+            "label_overrides": label_overrides,
+            "rows": legacy_rows,
         }
 
     def build_sections(self, results: dict[str, Any]) -> list[dict[str, Any]]:
         """Build output sections from scenario results."""
-        scenario_results = results["scenario_results"]
-        rows_spec = results["rows"]
-
-        # Build DataFrame for main results table
-        table_data: dict[str, list[Any]] = {"": []}  # First column for row labels
-        for label in scenario_results.keys():
-            table_data[label] = []
-
-        # Populate rows
-        for row_spec in rows_spec:
-            table_data[""].append(row_spec.label)
-
-            for scenario_label, eq_results in scenario_results.items():
-                value = eq_results.get(row_spec.value, "N/A")
-
-                # Get equation spec for formatting hints
-                eq_spec = model_def.equations.get(row_spec.value)
-                formatted = _format_value(value, eq_spec)
-
-                table_data[scenario_label].append(formatted)
-
-        df = pd.DataFrame(table_data)
-
-        # Build sections list
-        sections: list[dict[str, Any]] = []
-
-        # Add introduction section if present
-        if model_def.introduction:
-            sections.append(
-                {
-                    "title": "Introduction",
-                    "content": [model_def.introduction],
-                }
-            )
-
-        # Add main results table
-        sections.append(
-            {
-                "title": model_def.title,
-                "content": [df],
-            }
+        scenario_results: dict[str, dict[str, Any]] = results["scenario_results"]
+        scenario_results_by_id: dict[str, dict[str, Any]] = results.get(
+            "scenario_results_by_id", {}
         )
+        label_overrides: dict[str, str] = results.get("label_overrides", {})
+        scenarios = results["scenarios"]
+        figures_by_id = {fig.id: fig for fig in model_def.figures}
 
-        # Add figures if any
+        def _build_table_df(
+            rows_spec: list[Any],
+            column_ids: list[str] | None,
+        ) -> pd.DataFrame:
+            """Build a DataFrame for a table block."""
+            # Determine columns: either filtered subset or all scenarios
+            if column_ids is not None:
+                col_labels = [
+                    label_overrides.get(sid, next(
+                        (s.label for s in scenarios if s.id == sid), sid
+                    ))
+                    for sid in column_ids
+                    if sid in scenario_results_by_id
+                ]
+                col_eq_results = [
+                    scenario_results_by_id[sid]
+                    for sid in column_ids
+                    if sid in scenario_results_by_id
+                ]
+            else:
+                col_labels = list(scenario_results.keys())
+                col_eq_results = list(scenario_results.values())
+
+            table_data: dict[str, list[Any]] = {"label": []}
+            for col_label in col_labels:
+                table_data[col_label] = []
+
+            for row_spec in rows_spec:
+                table_data["label"].append(row_spec.label)
+                for col_label, eq_results in zip(col_labels, col_eq_results):
+                    value = eq_results.get(row_spec.value, "N/A")
+                    eq_spec = model_def.equations.get(row_spec.value)
+                    table_data[col_label].append(_format_value(value, eq_spec))
+
+            df = pd.DataFrame(table_data)
+            df = df.set_index("label")
+            df.index.name = None
+            return df
+
+        # --- Report blocks path ---
+        if model_def.report is not None:
+            sections: list[dict[str, Any]] = []
+            for block in model_def.report:
+                if isinstance(block, MarkdownBlock):
+                    sections.append({"type": "markdown", "content": block.content})
+
+                elif isinstance(block, TableBlock):
+                    df = _build_table_df(block.rows, block.columns)
+                    sections.append(
+                        {
+                            "type": "table",
+                            "caption": block.caption,
+                            "content": df,
+                        }
+                    )
+
+                elif isinstance(block, FigureBlock):
+                    fig = figures_by_id.get(block.id)
+                    if fig is not None:
+                        sections.append(
+                            {
+                                "type": "figure",
+                                "title": fig.title,
+                                "content": f"Figure: {fig.alt_text or 'Visualization'}",
+                            }
+                        )
+            return sections
+
+        # --- Legacy path (introduction + single table + figures) ---
+        sections = []
+        if model_def.introduction:
+            sections.append({"type": "markdown", "content": model_def.introduction})
+
+        rows_spec = results["rows"]
+        df = _build_table_df(rows_spec, column_ids=None)
+        sections.append({"type": "table", "caption": None, "content": df})
+
         for figure in model_def.figures:
             sections.append(
                 {
+                    "type": "figure",
                     "title": figure.title,
-                    "content": [f"Figure: {figure.alt_text or 'Visualization'}"],
+                    "content": f"Figure: {figure.alt_text or 'Visualization'}",
                 }
             )
 

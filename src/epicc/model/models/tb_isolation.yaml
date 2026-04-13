@@ -3,32 +3,6 @@ description: "Estimates hospitalization, tracing, and productivity costs for TB 
 authors:
   - name: Edward Wang
   - name: Olivia Banks
-introduction: |
-  ## Overview
-  This calculator compares the economic impact of two tuberculosis isolation protocols:
-  14-day isolation (standard) versus 5-day isolation (shortened). The model accounts for
-  direct isolation costs, lost productivity, and the long-term costs of secondary TB
-  infections.
-
-  ## Scenarios
-  - **14-day Isolation**: Standard isolation protocol for infectious TB patients
-  - **5-day Isolation**: Shortened isolation protocol (increases secondary transmission risk)
-
-  ## Key Model Components
-  1. **Secondary Infection Estimation**: Models latent and active TB cases resulting from
-      reduced isolation time
-  2. **Direct Costs**: Daily costs vary by isolation setting (hospital, motel, or home)
-  3. **Productivity Loss**: Lost wages during isolation period (index case only)
-  4. **Secondary Infection Costs**: Long-term costs of treating latent and active TB in
-      contacts, with appropriate discounting over remaining years of life
-
-  ## Assumptions
-  - All costs are in USD
-  - Shortened isolation increases infectiousness by a multiplier
-  - Latent TB progression to active disease occurs in two phases: first 2 years and
-    remainder of lifetime
-  - Future costs are discounted at the specified discount rate
-  - Productivity loss assumes 8-hour workdays
 
 parameters:
   contacts_per_case:
@@ -309,32 +283,63 @@ equations:
     output: "number"
     compute: eq_direct + eq_productivity + eq_secondary
 
-table:
-  scenarios:
-    - id: "14_day"
-      label: "14-day Isolation"
-      vars:
-        isolation_days: 14
-        latent_multiplier: 1.0
-    - id: "5_day"
-      label: "5-day Isolation"
-      vars:
-        isolation_days: 5
-        latent_multiplier: 1.5
-
-  rows:
-    - label: "Latent TB infections"
-      value: "eq_latent"
-    - label: "Active TB disease"
-      value: "eq_active"
-    - label: "Direct cost of isolation"
-      value: "eq_direct"
-    - label: "Lost productivity for index case"
-      value: "eq_productivity"
-    - label: "Cost of secondary infections"
-      value: "eq_secondary"
-    - label: "Total cost"
-      value: "eq_total"
-      emphasis: "strong"
+scenarios:
+  - id: "14_day"
+    label: "14-day Isolation"
+    vars:
+      isolation_days: 14
+      latent_multiplier: 1.0
+  - id: "5_day"
+    label: "5-day Isolation"
+    vars:
+      isolation_days: 5
+      latent_multiplier: 1.5
 
 figures: []
+
+report:
+  - type: markdown
+    content: |
+      ## Overview
+      This calculator compares the economic impact of two tuberculosis isolation protocols:
+      14-day isolation (standard) versus 5-day isolation (shortened). The model accounts for
+      direct isolation costs, lost productivity, and the long-term costs of secondary TB
+      infections.
+
+      ## Scenarios
+      - **14-day Isolation**: Standard isolation protocol for infectious TB patients
+      - **5-day Isolation**: Shortened isolation protocol (increases secondary transmission risk)
+
+      ## Key Model Components
+      1. **Secondary Infection Estimation**: Models latent and active TB cases resulting from
+          reduced isolation time
+      2. **Direct Costs**: Daily costs vary by isolation setting (hospital, motel, or home)
+      3. **Productivity Loss**: Lost wages during isolation period (index case only)
+      4. **Secondary Infection Costs**: Long-term costs of treating latent and active TB in
+          contacts, with appropriate discounting over remaining years of life
+
+      ## Assumptions
+      - All costs are in USD
+      - Shortened isolation increases infectiousness by a multiplier
+      - Latent TB progression to active disease occurs in two phases: first 2 years and
+        remainder of lifetime
+      - Future costs are discounted at the specified discount rate
+      - Productivity loss assumes 8-hour workdays
+
+  - type: table
+    caption: "Cost comparison by isolation protocol"
+    rows:
+      - label: "Latent TB infections"
+        value: "eq_latent"
+      - label: "Active TB disease"
+        value: "eq_active"
+      - label: "Direct cost of isolation"
+        value: "eq_direct"
+      - label: "Lost productivity for index case"
+        value: "eq_productivity"
+      - label: "Cost of secondary infections"
+        value: "eq_secondary"
+      - label: "Total cost"
+        value: "eq_total"
+        emphasis: "strong"
+
