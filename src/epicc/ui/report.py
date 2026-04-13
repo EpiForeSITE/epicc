@@ -184,7 +184,7 @@ class GraphBlockRenderer(BlockRenderer):
                     unsafe_allow_html=True
                 )
 
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, width='stretch', key=f'plotly-{self._uuid}')
 
     def _resolve_columns(
         self, run_results: dict[str, Any]

@@ -315,6 +315,8 @@ report:
       - **14-day Isolation**: Standard isolation protocol for infectious TB patients
       - **5-day Isolation**: Shortened isolation protocol (increases secondary transmission risk)
 
+  - type: markdown
+    content: |
       ## Key Model Components
       1. **Secondary Infection Estimation**: Models latent and active TB cases resulting from
           reduced isolation time
@@ -322,7 +324,53 @@ report:
       3. **Productivity Loss**: Lost wages during isolation period (index case only)
       4. **Secondary Infection Costs**: Long-term costs of treating latent and active TB in
           contacts, with appropriate discounting over remaining years of life
+      
+      ### Transmission Risk Impact
+      
+      Reducing isolation duration increases the infectious period, leading to more secondary cases:
 
+  - type: graph
+    kind: bar
+    title: "Health outcomes by isolation protocol"
+    caption: "Shorter isolation periods lead to more secondary TB infections, with cascading health and economic consequences."
+    rows:
+      - label: "Latent TB infections"
+        value: "eq_latent"
+      - label: "Active TB disease"
+        value: "eq_active"
+
+  - type: graph
+    kind: stacked_bar
+    title: "Cost breakdown by isolation protocol"
+    caption: "While shorter isolation reduces direct costs, secondary infection costs often dominate the total economic impact."
+    rows:
+      - label: "Direct cost of isolation"
+        value: "eq_direct"
+      - label: "Lost productivity for index case"
+        value: "eq_productivity"
+      - label: "Cost of secondary infections"
+        value: "eq_secondary"
+
+  - type: markdown
+    content: |
+      ## Economic Impact Summary
+      
+      The trade-off between isolation duration and transmission risk creates complex economic dynamics:
+      
+      - **Short-term savings**: Reduced isolation costs and productivity losses
+      - **Long-term costs**: Higher burden from secondary infections
+      - **Net effect**: Often favors longer isolation from a societal cost perspective
+
+  - type: graph
+    kind: bar
+    title: "Total cost comparison"
+    caption: "Overall economic impact typically favors longer isolation periods despite higher upfront costs."
+    rows:
+      - label: "Total cost"
+        value: "eq_total"
+
+  - type: markdown
+    content: |
       ## Assumptions
       - All costs are in USD
       - Shortened isolation increases infectiousness by a multiplier
@@ -332,7 +380,7 @@ report:
       - Productivity loss assumes 8-hour workdays
 
   - type: table
-    caption: "Cost comparison by isolation protocol"
+    caption: "Detailed cost comparison by isolation protocol"
     rows:
       - label: "Latent TB infections"
         value: "eq_latent"
@@ -347,34 +395,4 @@ report:
       - label: "Total cost"
         value: "eq_total"
         emphasis: "strong"
-
-  - type: graph
-    kind: stacked_bar
-    title: "Cost breakdown by isolation protocol"
-    caption: "Direct costs, productivity losses, and secondary infection costs for each isolation strategy."
-    rows:
-      - label: "Direct cost of isolation"
-        value: "eq_direct"
-      - label: "Lost productivity for index case"
-        value: "eq_productivity"
-      - label: "Cost of secondary infections"
-        value: "eq_secondary"
-
-  - type: graph
-    kind: bar
-    title: "Health outcomes by isolation protocol"
-    caption: "Number of latent and active TB cases resulting from each isolation strategy."
-    rows:
-      - label: "Latent TB infections"
-        value: "eq_latent"
-      - label: "Active TB disease"
-        value: "eq_active"
-
-  - type: graph
-    kind: bar
-    title: "Total cost comparison"
-    caption: "Overall economic impact of 14-day versus 5-day isolation protocols."
-    rows:
-      - label: "Total cost"
-        value: "eq_total"
 
