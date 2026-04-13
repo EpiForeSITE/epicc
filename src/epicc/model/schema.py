@@ -21,6 +21,16 @@ class Parameter(BaseModel):
     references: list[str] = Field(default_factory=list)
 
 
+class ParameterGroup(BaseModel):
+    """A named visual group of parameters or nested sub-groups."""
+
+    label: str
+    children: list["str | ParameterGroup"] = Field(default_factory=list)
+
+
+ParameterGroup.model_rebuild()
+
+
 class Equation(BaseModel):
     label: str
     unit: str | None = None
@@ -69,8 +79,10 @@ class Model(BaseModel):
     parameters: dict[str, Parameter]
     equations: dict[str, Equation]
 
+    groups: list[str | ParameterGroup] | None = None
+
     table: Table
     figures: list[Figure] = Field(default_factory=list)
 
 
-__all__ = ["Model"]
+__all__ = ["Model", "ParameterGroup"]

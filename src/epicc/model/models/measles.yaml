@@ -120,6 +120,23 @@ parameters:
     references:
       - "CDC Measles quarantine guidelines (21 days from last exposure)."
 
+groups:
+  - label: "Medical Costs"
+    children:
+      - cost_measles_hospitalization
+      - proportion_hospitalized
+  - label: "Lost Productivity"
+    children:
+      - proportion_missed_workdays
+      - hourly_wage_worker
+      - quarantine_days
+      - vaccination_rate
+  - label: "Contact Tracing"
+    children:
+      - contacts_per_case
+      - hours_contact_tracing_per_contact
+      - hourly_wage_contract_tracer
+
 equations:
   eq_hosp:
     label: "Hospitalization cost"

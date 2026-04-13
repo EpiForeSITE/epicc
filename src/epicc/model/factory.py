@@ -268,6 +268,10 @@ def create_model_class(
         """Return the Parameter schema objects keyed by param_id."""
         return dict(model_def.parameters)
 
+    def parameter_groups(self) -> list | None:
+        """Return the parameter group tree, or None if not defined."""
+        return model_def.groups
+
     # Build the methods dictionary for the class
     methods = {
         "human_name": human_name,
@@ -282,6 +286,7 @@ def create_model_class(
         "get_source_path": get_source_path,
         "get_model_definition": get_model_definition,
         "parameter_specs": property(parameter_specs),
+        "parameter_groups": property(parameter_groups),
         # Class metadata
         "__module__": "epicc.model.factory",
         "__doc__": f"Dynamically generated model class for '{model_def.title}'",

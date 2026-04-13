@@ -159,6 +159,21 @@ class TestErrorHandling:
         with pytest.raises(RuntimeError, match="undefined variable"):
             evaluator.evaluate_all({"a": 10})
 
+    def test_missing_variable_suggests_close_match(self):
+        """Test that a typo in a variable name produces a helpful suggestion."""
+        equations = {"result": "contacts_per_cse * 2"}  # typo: _cse vs _case
+        evaluator = EquationEvaluator(equations)
+        with pytest.raises(RuntimeError, match="Did you mean.*contacts_per_case"):
+            evaluator.evaluate_all({"contacts_per_case": 100})
+
+    def test_missing_variable_no_suggestion_when_no_match(self):
+        """Test that no suggestion is given when nothing is close enough."""
+        equations = {"result": "zzz_totally_unknown + 1"}
+        evaluator = EquationEvaluator(equations)
+        with pytest.raises(RuntimeError) as exc_info:
+            evaluator.evaluate_all({"contacts_per_case": 100})
+        assert "Did you mean" not in str(exc_info.value)
+
     def test_division_by_zero(self):
         """Test runtime error for division by zero."""
         equations = {"result": "10 / x"}

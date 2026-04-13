@@ -54,3 +54,8 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
     def parameter_specs(self) -> dict[str, Any] | None:
         """Optional mapping of param_id to Parameter schema objects for rich UI rendering."""
         return None
+
+    @property
+    def parameter_groups(self) -> list | None:
+        """Optional parameter group tree for visual organization in the UI."""
+        return None

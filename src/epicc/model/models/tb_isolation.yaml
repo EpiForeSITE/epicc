@@ -206,6 +206,39 @@ parameters:
     max: 100
     unit: "years"
 
+groups:
+  - label: "Transmission"
+    children:
+      - contacts_per_case
+      - prob_latent_if_14_day
+      - infectiousness_multiplier
+  - label: "Disease Progression"
+    children:
+      - prob_latent_to_active_2yr
+      - prob_latent_to_active_lifetime
+  - label: "Isolation Costs"
+    children:
+      - isolation_type
+      - label: "Hospital"
+        children:
+          - direct_medical_cost_day
+          - isolation_cost
+      - label: "Motel / Home"
+        children:
+          - motel_room_cost
+          - hourly_wage_nurse
+          - nurse_checkin_hours
+  - label: "Secondary Infection Costs"
+    children:
+      - cost_latent
+      - cost_active
+      - discount_rate
+      - remaining_years_of_life
+  - label: "Productivity"
+    children:
+      - hourly_wage_worker
+      - workday_ratio
+
 equations:
   eq_latent_baseline:
     label: "Baseline latent TB infections"

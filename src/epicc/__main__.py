@@ -212,7 +212,11 @@ def _render_python_parameter_inputs(
                 )
 
     render_parameters_with_indent(
-        model_defaults, params, model_id=model_key, param_specs=model.parameter_specs
+        model_defaults,
+        params,
+        model_id=model_key,
+        param_specs=model.parameter_specs,
+        param_groups=model.parameter_groups,
     )
     return params, label_overrides, model_defaults, False
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import streamlit as st
 
 if TYPE_CHECKING:
-    from epicc.model.schema import Parameter
+    from epicc.model.schema import Parameter, ParameterGroup
 
 
 def item_level(key: str) -> int:
@@ -102,6 +102,71 @@ def _render_spec_widget(
             )
 
 
+def _render_param(
+    param_id: str,
+    default_value: Any,
+    widget_key: str,
+    params: dict[str, Any],
+    container: Any,
+    spec: Parameter | None,
+) -> None:
+    """Render a single parameter widget, with or without a spec."""
+    if spec is not None:
+        _render_spec_widget(param_id, spec, default_value, widget_key, params, container)
+    elif widget_key in st.session_state:
+        params[param_id] = container.text_input(param_id, key=widget_key)
+    else:
+        params[param_id] = container.text_input(
+            param_id, value=str(default_value) if default_value is not None else "", key=widget_key
+        )
+
+
+def _collect_group_param_ids(nodes: list) -> set[str]:
+    """Recursively collect all param IDs referenced in a group tree."""
+    ids: set[str] = set()
+    for node in nodes:
+        if isinstance(node, str):
+            ids.add(node)
+        else:
+            ids.update(_collect_group_param_ids(node.children))
+    return ids
+
+
+def _render_group_node(
+    node: str | ParameterGroup,
+    param_specs: dict[str, Parameter],
+    param_defaults: dict[str, Any],
+    params: dict[str, Any],
+    model_id: str,
+    container: Any,
+    depth: int,
+) -> None:
+    """Recursively render a group node or a leaf param ID."""
+    if isinstance(node, str):
+        param_id = node
+        if param_id not in param_defaults:
+            return
+        default_value = param_defaults[param_id]
+        widget_key = f"{model_id}:{param_id}"
+        spec = param_specs.get(param_id)
+        _render_param(param_id, default_value, widget_key, params, container, spec)
+    else:
+        # It's a ParameterGroup
+        if depth == 0:
+            # Top-level groups become sidebar expanders
+            child_container = container.expander(node.label, expanded=False)
+        else:
+            # Nested groups: Streamlit doesn't support nested expanders, so render
+            # a bold markdown sub-header inside the current container instead
+            container.markdown(f"**{node.label}**")
+            child_container = container
+
+        for child in node.children:
+            _render_group_node(
+                child, param_specs, param_defaults, params, model_id, child_container, depth + 1
+            )
+
+
 def _set_param_widget_state(
     widget_key: str,
     param_id: str,
@@ -162,8 +227,35 @@ def render_parameters_with_indent(
     params: dict[str, Any],
     model_id: str,
     param_specs: dict[str, Parameter] | None = None,
+    param_groups: list | None = None,
 ) -> None:
-    """Render flattened parameter data as top-level controls and one-level nested expanders."""
+    """Render flattened parameter data as sidebar widgets.
+
+    When *param_groups* is provided the parameters are arranged according to
+    the group tree (arbitrary depth).  Top-level groups become sidebar
+    expanders; deeper sub-groups render as bold sub-headers inside the
+    containing expander.  Any parameters not referenced by the tree are
+    rendered flat above the groups.
+
+    When *param_groups* is None the parameters are rendered flat (legacy
+    tab-indent behaviour is preserved for uploaded parameter files).
+    """
+    if param_groups is not None:
+        specs = param_specs or {}
+        # Render params not mentioned in any group first (safety-net)
+        grouped_ids = _collect_group_param_ids(param_groups)
+        for param_id, default_value in param_dict.items():
+            if param_id not in grouped_ids:
+                widget_key = f"{model_id}:{param_id}"
+                spec = specs.get(param_id)
+                _render_param(param_id, default_value, widget_key, params, st.sidebar, spec)
+
+        # Render the group tree
+        for node in param_groups:
+            _render_group_node(node, specs, param_dict, params, model_id, st.sidebar, depth=0)
+        return
+
+    # --- Legacy flat / tab-indented rendering (no groups defined) ---
     items = list(param_dict.items())
     i = 0
     n = len(items)
