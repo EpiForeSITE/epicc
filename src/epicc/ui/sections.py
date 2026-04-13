@@ -12,7 +12,7 @@ import streamlit as st
 
 def render_sections(sections: list[dict[str, Any]]) -> None:
     for i, section in enumerate(sections):
-        block_type = section.get("type", "legacy")
+        block_type = section.get("type")
 
         if block_type == "markdown":
             st.markdown(section["content"], unsafe_allow_html=True)
@@ -28,18 +28,7 @@ def render_sections(sections: list[dict[str, Any]]) -> None:
             st.write(section.get("content", ""))
 
         else:
-            # Legacy section format: {title, content: [...]}
-            title = section.get("title", "")
-            content = section.get("content", [])
-            if title:
-                st.markdown(f"## {title}")
-            for block in content:
-                if hasattr(block, "columns"):
-                    st.dataframe(block, width='stretch')
-                elif isinstance(block, str):
-                    st.markdown(block, unsafe_allow_html=True)
-                else:
-                    st.write(block)
+            st.warning(f"Unknown section block type: {block_type!r}", icon="⚠️")
 
         if i < len(sections) - 1:
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
