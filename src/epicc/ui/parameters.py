@@ -8,6 +8,7 @@ import streamlit as st
 from pydantic import BaseModel, ValidationError
 
 from epicc.formats import VALID_PARAMETER_SUFFIXES
+from epicc.ui.export import render_parameter_export
 from epicc.model.base import BaseSimulationModel
 from epicc.model.parameters import load_model_params
 from epicc.ui.state import (
@@ -526,5 +527,14 @@ def render_sidebar_parameters(
         param_specs=model.parameter_specs,
         param_groups=model.parameter_groups,
     )
+
+    # --- parameter export ---------------------------------------------------
+    typed_params = build_typed_params(model, model_defaults, params)
+    render_parameter_export(
+        model.human_name(),
+        typed_params.model_dump(),
+        pydantic_model=type(typed_params),
+    )
+
     return params, label_overrides, model_defaults, False
 

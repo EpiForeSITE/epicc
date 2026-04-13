@@ -3,6 +3,11 @@
     display: none;
 }
 
+/* Hide "press enter to apply." */
+div[data-testid="InputInstructions"] > span:nth-child(1) {
+    visibility: hidden;
+}
+
 /* Property tooltips. */
 [data-baseweb="tooltip"] {
     /* Tooltips in sidebar are pressed against the corner, so add a little margin. */

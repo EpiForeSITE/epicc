@@ -8,10 +8,10 @@ from Model schema instances loaded from YAML/XLSX files.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
 
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
@@ -24,6 +24,66 @@ class InterpretedModelParams(BaseModel):
     """
 
     model_config = {"extra": "allow"}
+
+
+def _make_parameter_model(model_def: Model) -> type[BaseModel]:
+    """Build a typed Pydantic model for *model_def*'s parameters.
+
+    Each field carries the declared Python type, default value, and any
+    ``ge``/``le`` numeric constraints.  Enum parameters use a ``Literal``
+    annotation so that invalid option values are caught at validation time.
+    """
+    fields: dict[str, Any] = {}
+    for param_id, param in model_def.parameters.items():
+        base_description = param.description or param.label
+        default = param.default
+        if param.type == "integer":
+            kwargs: dict[str, Any] = {}
+            if param.min is not None:
+                kwargs["ge"] = int(param.min)
+            if param.max is not None:
+                kwargs["le"] = int(param.max)
+            constraint_hint = _range_hint(param.min, param.max, param.unit)
+            description = f"{base_description}\n\n{constraint_hint}" if constraint_hint else base_description
+            fields[param_id] = (int, Field(int(default), description=description, **kwargs))
+        elif param.type == "number":
+            kwargs = {}
+            if param.min is not None:
+                kwargs["ge"] = float(param.min)
+            if param.max is not None:
+                kwargs["le"] = float(param.max)
+            constraint_hint = _range_hint(param.min, param.max, param.unit)
+            description = f"{base_description}\n\n{constraint_hint}" if constraint_hint else base_description
+            fields[param_id] = (float, Field(float(default), description=description, **kwargs))
+        elif param.type == "boolean":
+            fields[param_id] = (bool, Field(bool(default), description=base_description))
+        elif param.type == "enum" and param.options:
+            keys = tuple(param.options.keys())
+            literal_type = Literal[keys]  # type: ignore[valid-type]
+            options_hint = "Options: " + ", ".join(
+                f"{k} ({v})" for k, v in param.options.items()
+            )
+            description = f"{base_description}\n\n{options_hint}"
+            fields[param_id] = (literal_type, Field(str(default), description=description))
+        else:
+            fields[param_id] = (str, Field(str(default), description=base_description))
+    return create_model("GeneratedParams", **fields)
+
+
+def _range_hint(
+    min_val: int | float | None,
+    max_val: int | float | None,
+    unit: str | None,
+) -> str:
+    """Return a range/unit hint string, or empty string if nothing to say."""
+    parts: list[str] = []
+    if min_val is not None:
+        parts.append(f"min {min_val}")
+    if max_val is not None:
+        parts.append(f"max {max_val}")
+    if unit:
+        parts.append(unit)
+    return f"Range: {', '.join(parts)}" if parts else ""
 
 
 def _sanitize_class_name(title: str) -> str:
@@ -114,6 +174,9 @@ def create_model_class(
     Raises:
         ValueError: If the model definition is invalid
     """
+    # Build per-model typed parameter model
+    _typed_param_model = _make_parameter_model(model_def)
+
     # Build equation evaluator
     equations_dict = {eq_id: eq.compute for eq_id, eq in model_def.equations.items()}
 
@@ -144,8 +207,8 @@ def create_model_class(
             param_id: param.default for param_id, param in model_def.parameters.items()
         }
 
-    def parameter_model(self) -> type[InterpretedModelParams]:
-        return InterpretedModelParams
+    def parameter_model(self) -> type[BaseModel]:
+        return _typed_param_model
 
     def run(
         self,
@@ -156,25 +219,7 @@ def create_model_class(
         if label_overrides is None:
             label_overrides = {}
 
-        # Convert params to dict, coercing string values to declared types
-        _type_coerce: dict[str, type] = {
-            "integer": int,
-            "number": float,
-            "boolean": bool,
-        }
-        raw_dict = params.model_dump()
-        param_dict: dict[str, Any] = {}
-        for param_id, value in raw_dict.items():
-            param_spec = model_def.parameters.get(param_id)
-            if param_spec is not None and isinstance(value, str):
-                if param_spec.type != "enum":
-                    coerce = _type_coerce.get(param_spec.type)
-                    if coerce is not None:
-                        try:
-                            value = coerce(value)
-                        except (ValueError, TypeError):
-                            pass
-            param_dict[param_id] = value
+        param_dict = params.model_dump()
 
         # Evaluate for each scenario
         scenarios = model_def.resolved_scenarios()

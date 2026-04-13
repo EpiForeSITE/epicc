@@ -85,7 +85,13 @@ class XLSXFormat(BaseFormat[Workbook]):
 
         return opaque, wb
 
-    def write(self, data: dict[str, Any], template: Workbook | None = None) -> bytes:
+    def write(
+        self,
+        data: dict[str, Any],
+        template: Workbook | None = None,
+        *,
+        pydantic_model: type[BaseModel] | None = None,
+    ) -> bytes:
         """
         Write a dictionary to an XLSX file.
 
@@ -98,19 +104,27 @@ class XLSXFormat(BaseFormat[Workbook]):
             Byte array containing the XLSX data.
         """
 
-        wb = template or Workbook()
-        ws = wb.active
-        assert ws is not None, "Workbook must have an active worksheet (bug)."
         flat_data = _flatten_dict(data)
 
-        # Populate with the provided data piecewise.
-        for row in ws.iter_rows():
-            key_cell = row[_COL_PARAMETER]
-            val_cell = row[_COL_VALUE]
-            if key_cell.value in flat_data:
-                val_cell.value = flat_data[key_cell.value]  # type: ignore[index]
+        if template is not None:
+            wb = template
+            ws = wb.active
+            assert ws is not None, "Workbook must have an active worksheet (bug)."
+            # Update only rows that already exist in the template.
+            for row in ws.iter_rows():
+                key_cell = row[_COL_PARAMETER]
+                val_cell = row[_COL_VALUE]
+                if key_cell.value in flat_data:
+                    val_cell.value = flat_data[key_cell.value]  # type: ignore[index]
+        else:
+            descriptions = _field_descriptions(pydantic_model) if pydantic_model is not None else {}
+            wb = Workbook()
+            ws = wb.active
+            assert ws is not None, "Workbook must have an active worksheet (bug)."
+            ws.append(["Parameter", "Value", "Description"])
+            for key, value in flat_data.items():
+                ws.append([key, value, descriptions.get(key, "")])
 
-        # Awful, but openpyxl is only capable of doing it this way.
         output = BytesIO()
         wb.save(output)
         return output.getvalue()
@@ -145,6 +159,21 @@ def _flatten(model: BaseModel, prefix: str = "") -> list[tuple[str, Any, str]]:
         else:
             rows.append((key, value, description))
     return rows
+
+
+def _field_descriptions(model: type[BaseModel], prefix: str = "") -> dict[str, str]:
+    """Return a mapping of dot-notation key → field description for *model*'s fields."""
+    result: dict[str, str] = {}
+    for name, field_info in model.model_fields.items():
+        key = f"{prefix}.{name}" if prefix else name
+        annotation = model.__annotations__.get(name)
+        # Recurse into nested BaseModel sub-models (type annotation check is best-effort)
+        origin = getattr(annotation, "__origin__", None)
+        if origin is None and isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            result.update(_field_descriptions(annotation, prefix=key))
+        else:
+            result[key] = (field_info.description or "").replace("\n", " ").strip()
+    return result
 
 
 def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
