@@ -140,7 +140,7 @@ with param_col:
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, width='stretch'
+        "Run Simulation", disabled=has_input_errors, width='stretch', type='primary'
     )
 
 # ---------------------------------------------------------------------------
@@ -171,10 +171,11 @@ with result_col:
     renderer = get_report_renderer(active_model)
     _HINT = "This report has not been filled, since your simulation has not been run. Run the simulation to see the results here."
 
-    if has_results():
-        renderer.render(get_run_output())
-    else:
-        renderer.render(None, hint=_HINT)
+    with st.container(key='results-report'):
+        if has_results():
+            renderer.render(get_run_output())
+        else:
+            renderer.render(None, hint=_HINT)
 
     st.divider()
     render_pdf_export_button(container=result_col)

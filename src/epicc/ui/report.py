@@ -18,6 +18,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+import uuid
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -202,6 +203,7 @@ class GraphBlockRenderer(BlockRenderer):
         self._block = block
         self._equations = equations
         self._scenarios = scenarios
+        self._uuid = str(uuid.uuid4())
 
     def render(self, run_results: dict[str, Any] | None) -> None:
         if run_results is None:
@@ -219,9 +221,8 @@ class GraphBlockRenderer(BlockRenderer):
             _callout("⚠️", "Graph could not be rendered", str(exc))
             return
 
-        # Center chart in 80% of available space
-        _, chart_col, _ = st.columns([0.1, 0.8, 0.1])
-        with chart_col:
+        # Chart!
+        with st.container(key=f'graph-block-{self._uuid}'):
             if self._block.title:
                 st.markdown(
                     f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
@@ -229,9 +230,16 @@ class GraphBlockRenderer(BlockRenderer):
                     f"{self._block.title}</span></div>",
                     unsafe_allow_html=True,
                 )
-            st.plotly_chart(fig, width='stretch')
+
             if self._block.caption:
-                st.caption(self._block.caption)
+                st.markdown(
+                    f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
+                    f"<span style='font-size: 0.9rem; color: #6c757d;'>"
+                    f"{self._block.caption}</span></div>",
+                    unsafe_allow_html=True
+                )
+
+            st.plotly_chart(fig, width='stretch')
 
     def _resolve_columns(
         self, run_results: dict[str, Any]

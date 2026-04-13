@@ -51,61 +51,6 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     font-size: 0.9rem;
 }
 
-/* Print rules to hide controls/chrome and keep the rendered results visible */
-@media print {
-    @page {
-        margin: 0.5in;
-    }
-
-    /* Hide the parameter panel (first column), header row, and Streamlit chrome */
-    [data-testid="stSidebar"],
-    [data-testid="stToolbar"],
-    [data-testid="stDecoration"],
-    [data-testid="stStatusWidget"],
-    [data-testid="collapsedControl"],
-    header,
-    footer,
-    #MainMenu,
-    .no-print,
-    .export-hint {
-        display: none !important;
-    }
-
-    /* Hide the params column (first child of the two-column split) */
-    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child {
-        display: none !important;
-    }
-
-    /* Hide the header divider and title/model-selector row */
-    [data-testid="stMainBlockContainer"] > div:first-child {
-        display: none !important;
-    }
-
-    [data-testid="stAppViewContainer"] {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    [data-testid="stMainBlockContainer"] {
-        max-width: 100% !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-
-    .section-divider {
-        page-break-after: auto;
-    }
-
-    h1,
-    h2,
-    h3,
-    table,
-    .stMarkdown,
-    .stTable {
-        break-inside: avoid;
-    }
-}
-
 /* Sticky parameter column for two-column layout */
 [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child {
     position: sticky;
@@ -127,4 +72,76 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
 /* Ensure parameter column content has proper spacing */
 [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child > div {
     padding-bottom: 1rem;
+}
+
+/* Print rules to hide controls/chrome and keep the rendered results visible */
+@media print {
+    @page {
+        margin: 0.5in;
+    }
+
+    /* [data-testid="stAppViewContainer"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        max-width: 100% !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    } */
+
+    .section-divider {
+        page-break-after: auto;
+    }
+
+    h1,
+    h2,
+    h3,
+    table,
+    .stMarkdown,
+    .stVerticalBlock,
+    .stCaptionContainer,
+    .stElementContainer,
+    .stPlotlyChart,
+    .stDataFrame,
+    .stAgGrid,
+    .stTablekey,
+    [class^="st-key-graph-block-"] {
+        break-inside: avoid;
+    }
+
+    [class^="st-key-graph-block-"],
+    .stPlotlyChart,
+    .stDataFrame,
+    .stAgGrid,
+    .stTable {
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
+    }
+
+    /* Show only results. */
+
+    body * {
+        display: none;
+    }
+   
+    *:has(.st-key-results-report) {
+        display: block !important;
+        position: static !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        flex: none !important;
+        grid: none !important;
+        border: none !important;
+        background: none !important;
+    }
+
+    .st-key-results-report,
+    .st-key-results-report * {
+        display: revert !important;
+    }
 }
