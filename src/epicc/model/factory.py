@@ -67,7 +67,7 @@ def _make_parameter_model(model_def: Model) -> type[BaseModel]:
             fields[param_id] = (literal_type, Field(str(default), description=description))
         else:
             fields[param_id] = (str, Field(str(default), description=base_description))
-    return create_model("GeneratedParams", **fields)
+    return create_model("GeneratedParams", __config__={"extra": "forbid"}, **fields)
 
 
 def _range_hint(

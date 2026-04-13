@@ -44,16 +44,68 @@ model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all
 
 hdr_title, hdr_model = st.columns([3, 3])
 hdr_title.title("epicc Cost Calculator")
-selected_label: str = hdr_model.selectbox(  # type: ignore[assignment]
+selected_label: str | None = hdr_model.selectbox(
     "Model",
     list(model_registry),
-    index=0,
+    index=None,
+    placeholder="Select a model…",
     label_visibility="collapsed",
 )
-active_model = model_registry[selected_label]
-params = sync_active_model(selected_label)
 
 st.divider()
+
+# ---------------------------------------------------------------------------
+# No model selected — show intro
+# ---------------------------------------------------------------------------
+
+if selected_label is None:
+    st.markdown(
+        """
+## Welcome to epicc
+
+**epicc** (or Epidemiological Cost Calculator) is a tool for quickly running arbitrary
+epidemiological models directly inside your browser. Select a disease model, adjust
+the parameters to match your setting, and run the simulation to explore the cost
+implications of different policy scenarios.
+
+### What you can do
+
+ - **Compare scenarios:** Each model defines multiple intervention points so you can
+   quantify the cost implications of different policy choices within the same run.
+
+ - **Understand the assumptions:** Every model documents the equations and default
+   values it uses. Read the parameter descriptions before you run, and treat outputs
+   with the caveats in mind.
+
+ - **Save and share your work:** Export your current parameters and send them to a
+   colleague, so they can pick up exactly where you left off, or reload them yourself
+   any time you want to revisit the analysis.
+
+ - **Generate a report:** Once you've run a simulation, save the results page as a PDF
+   to share directly with stakeholders.
+
+### A note on interpretation
+
+This tool is designed as a decision-support aid, not a definitive forecast. Results
+depend on the assumptions baked into each model and the parameter values you supply.
+Always review the model assumptions before sharing outputs externally.
+
+### Get started
+
+Choose a model from the combobox above to get started. Edit it's parameters on the
+left, run the simulation, and see the results on the right. Happy exploring!
+
+"""
+    )
+
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# Model selected — sync state
+# ---------------------------------------------------------------------------
+
+active_model = model_registry[selected_label]
+params = sync_active_model(selected_label)
 
 # ---------------------------------------------------------------------------
 # Two-column layout: parameters (left) | results (right)
