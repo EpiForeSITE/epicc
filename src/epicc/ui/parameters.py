@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import TYPE_CHECKING, Any
 
 import streamlit as st
+from pydantic import BaseModel, ValidationError
+
+from epicc.formats import VALID_PARAMETER_SUFFIXES
+from epicc.model.base import BaseSimulationModel
+from epicc.model.parameters import load_model_params
+from epicc.ui.state import (
+    clear_results,
+    get_active_param_identity,
+    get_upload_hash_cache,
+    reset_params,
+    set_active_param_identity,
+    set_upload_hash_cache,
+)
 
 if TYPE_CHECKING:
     from epicc.model.schema import Parameter, ParameterGroup
@@ -323,3 +338,193 @@ def render_parameters_with_indent(
                 )
 
         i = j
+
+
+# ---------------------------------------------------------------------------
+# Validation error display
+# ---------------------------------------------------------------------------
+
+def render_validation_error(
+    model_name: str, exc: ValidationError, *, sidebar: bool
+) -> None:
+    target = st.sidebar if sidebar else st
+    issues = exc.errors()
+    issue_count = len(issues)
+    target.error(f"Parameters do not match {model_name} schema ({issue_count} issues).")
+
+    with target.expander("Validation details", expanded=False):
+        preview_count = 8
+        for issue in issues[:preview_count]:
+            loc_parts = issue.get("loc", [])
+            path = " > ".join(str(p) for p in loc_parts) if loc_parts else "(root)"
+            st.write(f"- {path}: {issue.get('msg', 'Invalid value')}")
+        if issue_count > preview_count:
+            st.caption(f"...and {issue_count - preview_count} more.")
+
+        safe_name = re.sub(r"[^a-z0-9]+", "_", model_name.lower()).strip("_")
+        full_details = exc.json(indent=2)
+        digest = hashlib.sha1(full_details.encode()).hexdigest()[:10]
+        scope = "sidebar" if sidebar else "main"
+        st.text_area(
+            "Full details (copyable)",
+            value=full_details,
+            height=180,
+            key=f"{safe_name}_{scope}_validation_text_{digest}",
+        )
+        st.download_button(
+            "Download full error details",
+            data=full_details,
+            file_name=f"{safe_name}_validation_error.json",
+            mime="application/json",
+            key=f"{safe_name}_{scope}_validation_download_{digest}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Parameter flattening / merging helpers
+# ---------------------------------------------------------------------------
+
+def _unflatten_indented_params(flat_params: dict[str, Any]) -> dict[str, Any]:
+    root: dict[str, Any] = {}
+    stack: list[dict[str, Any]] = [root]
+    for raw_key, value in flat_params.items():
+        level = item_level(raw_key)
+        label = raw_key.strip()
+        while len(stack) > level + 1:
+            stack.pop()
+        parent = stack[-1]
+        if value is None:
+            node: dict[str, Any] = {}
+            parent[label] = node
+            stack.append(node)
+        else:
+            parent[label] = value
+    return root
+
+
+def _merge_sidebar_values(
+    nested_defaults: dict[str, Any], params: dict[str, Any]
+) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for key, value in nested_defaults.items():
+        if isinstance(value, dict):
+            merged[key] = _merge_sidebar_values(value, params)
+        else:
+            merged[key] = params.get(key, value)
+    return merged
+
+
+def build_typed_params(
+    model: BaseSimulationModel,
+    model_defaults_flat: dict[str, Any],
+    params: dict[str, Any],
+) -> BaseModel:
+    nested = _unflatten_indented_params(model_defaults_flat)
+    payload = _merge_sidebar_values(nested, params)
+    return model.parameter_model().model_validate(payload)
+
+
+# ---------------------------------------------------------------------------
+# Sidebar parameter panel (file upload + reset + group widgets)
+# ---------------------------------------------------------------------------
+
+def render_sidebar_parameters(
+    model: BaseSimulationModel,
+    model_key: str,
+    params: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any], bool]:
+    """Render the full sidebar parameter panel for *model*.
+
+    Returns ``(params, label_overrides, model_defaults_flat, has_errors)``.
+    ``has_errors`` is ``True`` when the sidebar should block the Run button.
+    """
+    label_overrides: dict[str, str] = {}
+
+    # --- file upload --------------------------------------------------------
+    uploaded = st.sidebar.file_uploader(
+        "Optional parameter file",
+        type=sorted(VALID_PARAMETER_SUFFIXES),
+        help="If omitted, model defaults are used.",
+        accept_multiple_files=False,
+    )
+
+    if uploaded:
+        cheap_id = (uploaded.name, uploaded.size)
+        cached = get_upload_hash_cache()
+        if cached is not None and cached[0] == cheap_id:
+            upload_hash = cached[1]
+        else:
+            upload_hash = hashlib.sha1(uploaded.getvalue()).hexdigest()
+            set_upload_hash_cache((cheap_id, upload_hash))
+        param_identity: tuple = ("upload", uploaded.name, uploaded.size, upload_hash)
+    else:
+        param_identity = ("default", None, 0, None)
+
+    should_refresh = False
+    if get_active_param_identity() != param_identity:
+        set_active_param_identity(param_identity)
+        params = reset_params()
+        clear_results()
+        should_refresh = True
+
+    # --- load defaults ------------------------------------------------------
+    try:
+        model_defaults = load_model_params(
+            model,
+            uploaded_params=uploaded or None,
+            uploaded_name=uploaded.name if uploaded else None,
+        )
+    except ValidationError as exc:
+        render_validation_error(model.human_name(), exc, sidebar=True)
+        return params, label_overrides, {}, True
+    except ValueError as exc:
+        st.sidebar.error(f"Could not read parameter file for {model.human_name()}: {exc}")
+        return params, label_overrides, {}, True
+
+    if not model_defaults:
+        st.sidebar.info("No default parameters defined for this model.")
+        return params, label_overrides, {}, True
+
+    # --- reset callback -----------------------------------------------------
+    current_headers = model.scenario_labels
+
+    def _handle_reset() -> None:
+        reset_parameters_to_defaults(
+            model_defaults, params, model_key, param_specs=model.parameter_specs
+        )
+        for key, default_text in (current_headers or {}).items():
+            st.session_state[f"py_label_{model_key}_{key}"] = default_text
+
+    if should_refresh:
+        _handle_reset()
+
+    st.sidebar.button("Reset Parameters", on_click=_handle_reset)
+
+    # --- scenario label overrides -------------------------------------------
+    if current_headers:
+        with st.sidebar.expander("Output Scenario Headers", expanded=False):
+            st.caption("Rename the output headers")
+            for key, default_text in current_headers.items():
+                widget_key = f"py_label_{model_key}_{key}"
+                default_label = str(default_text)
+                if widget_key not in st.session_state:
+                    label_overrides[key] = st.text_input(
+                        f"Label for '{default_label}'",
+                        value=default_label,
+                        key=widget_key,
+                    )
+                else:
+                    label_overrides[key] = st.text_input(
+                        f"Label for '{default_label}'", key=widget_key
+                    )
+
+    # --- parameter widgets --------------------------------------------------
+    render_parameters_with_indent(
+        model_defaults,
+        params,
+        model_id=model_key,
+        param_specs=model.parameter_specs,
+        param_groups=model.parameter_groups,
+    )
+    return params, label_overrides, model_defaults, False
+
