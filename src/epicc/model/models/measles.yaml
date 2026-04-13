@@ -198,3 +198,43 @@ report:
         value: "eq_total"
         emphasis: "strong"
 
+  - type: graph
+    kind: stacked_bar
+    title: "Cost breakdown by outbreak size"
+    caption: "Stacked cost components across the three outbreak scenarios."
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+
+  - type: graph
+    kind: pie
+    title: "Cost mix — large outbreak (803 cases)"
+    caption: "Proportional breakdown of cost components for the 803-case scenario."
+    columns:
+      - "803_cases"
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+
+  - type: graph
+    kind: line
+    title: "Cost scaling by outbreak size"
+    caption: "How each cost component scales with outbreak magnitude."
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+      - label: "Total"
+        value: "eq_total"
+

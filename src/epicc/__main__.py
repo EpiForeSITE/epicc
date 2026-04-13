@@ -27,7 +27,7 @@ from epicc.ui.styles import load_styles
 # One-time setup  (set_page_config MUST be the first Streamlit call)
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title="epicc Cost Calculator", layout="wide")
+st.set_page_config(page_title="EPICC Cost Calculator", layout="wide")
 load_styles()
 initialize_state()
 
@@ -43,7 +43,7 @@ model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all
 # ---------------------------------------------------------------------------
 
 hdr_title, hdr_model = st.columns([3, 3])
-hdr_title.title("epicc Cost Calculator")
+hdr_title.title("EPICC Cost Calculator")
 selected_label: str | None = hdr_model.selectbox(
     "Model",
     list(model_registry),
@@ -61,9 +61,9 @@ st.divider()
 if selected_label is None:
     st.markdown(
         """
-## Welcome to epicc
+## Welcome to EPICC
 
-**epicc** (or Epidemiological Cost Calculator) is a tool for quickly running arbitrary
+**EPICC** (or *EP*idemiological *C*ost *C*alculator) is a tool for quickly running arbitrary
 epidemiological models directly inside your browser. Select a disease model, adjust
 the parameters to match your setting, and run the simulation to explore the cost
 implications of different policy scenarios.
@@ -140,7 +140,7 @@ with param_col:
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, use_container_width=True
+        "Run Simulation", disabled=has_input_errors, width='stretch'
     )
 
 # ---------------------------------------------------------------------------

@@ -85,8 +85,20 @@ class FigureBlock(BaseModel):
     id: str = Field(..., description="References an entry in the top-level figures list.")
 
 
+class GraphBlock(BaseModel):
+    type: Literal["graph"]
+    kind: Literal["bar", "stacked_bar", "line", "pie"] = "bar"
+    title: str | None = None
+    caption: str | None = None
+    columns: list[str] | None = Field(
+        None,
+        description="Scenario IDs to include. Defaults to all scenarios in order.",
+    )
+    rows: list[TableRow] = Field(default_factory=list)
+
+
 ReportBlock = Annotated[
-    MarkdownBlock | TableBlock | FigureBlock,
+    MarkdownBlock | TableBlock | FigureBlock | GraphBlock,
     Field(discriminator="type"),
 ]
 
@@ -122,4 +134,4 @@ class Model(BaseModel):
         return self.scenarios
 
 
-__all__ = ["Model", "ParameterGroup", "TableRow", "TableBlock", "MarkdownBlock", "FigureBlock", "ReportBlock"]
+__all__ = ["Model", "ParameterGroup", "TableRow", "TableBlock", "MarkdownBlock", "FigureBlock", "GraphBlock", "ReportBlock"]

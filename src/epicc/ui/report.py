@@ -19,9 +19,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
-from epicc.model.schema import Figure, FigureBlock, MarkdownBlock, Scenario, TableBlock
+from epicc.model.schema import Figure, FigureBlock, GraphBlock, MarkdownBlock, Scenario, TableBlock
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,147 @@ class FigureBlockRenderer(BlockRenderer):
         _callout("📈", "Figure rendering not yet implemented")
 
 
+class GraphBlockRenderer(BlockRenderer):
+    """Renders a Plotly chart block in one of several supported kinds."""
+
+    _KIND_LABELS = {
+        "bar": "Bar chart",
+        "stacked_bar": "Stacked bar chart",
+        "line": "Line chart",
+        "pie": "Pie chart",
+    }
+
+    def __init__(
+        self,
+        block: GraphBlock,
+        equations: dict[str, Any],
+        scenarios: list[Scenario],
+    ) -> None:
+        self._block = block
+        self._equations = equations
+        self._scenarios = scenarios
+
+    def render(self, run_results: dict[str, Any] | None) -> None:
+        if run_results is None:
+            kind_label = self._KIND_LABELS.get(self._block.kind, self._block.kind)
+            _callout(
+                "📊",
+                f"{kind_label}" + (f" — {self._block.title}" if self._block.title else ""),
+                "Run simulation to see results",
+            )
+            return
+
+        try:
+            fig = self._build_figure(run_results)
+        except Exception as exc:
+            _callout("⚠️", "Graph could not be rendered", str(exc))
+            return
+
+        # Center chart in 80% of available space
+        _, chart_col, _ = st.columns([0.1, 0.8, 0.1])
+        with chart_col:
+            if self._block.title:
+                st.markdown(
+                    f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
+                    f"<span style='font-size: 1.1rem; font-weight: 600; color: #1f1f1f;'>"
+                    f"{self._block.title}</span></div>",
+                    unsafe_allow_html=True,
+                )
+            st.plotly_chart(fig, width='stretch')
+            if self._block.caption:
+                st.caption(self._block.caption)
+
+    def _resolve_columns(
+        self, run_results: dict[str, Any]
+    ) -> tuple[list[str], list[str], list[dict[str, Any]]]:
+        """Return (scenario_ids, scenario_labels, eq_results_per_scenario)."""
+        by_id: dict[str, dict] = run_results.get("scenario_results_by_id", {})
+        overrides: dict[str, str] = run_results.get("label_overrides", {})
+
+        if self._block.columns is not None:
+            pairs = [
+                (sid, next((s for s in self._scenarios if s.id == sid), None))
+                for sid in self._block.columns
+                if sid in by_id
+            ]
+        else:
+            pairs = [(s.id, s) for s in self._scenarios]
+
+        ids = [sid for sid, _ in pairs]
+        labels = [overrides.get(sid, s.label if s else sid) for sid, s in pairs]
+        results = [by_id.get(sid, {}) for sid, _ in pairs]
+        return ids, labels, results
+
+    def _build_figure(self, run_results: dict[str, Any]) -> go.Figure:
+        _, col_labels, col_results = self._resolve_columns(run_results)
+        rows = self._block.rows
+        row_labels = [r.label for r in rows]
+
+        kind = self._block.kind
+
+        if kind == "bar":
+            # One trace per row-equation; scenarios on x-axis
+            fig = go.Figure()
+            for row in rows:
+                values = [
+                    _raw_value(res.get(row.value, 0)) for res in col_results
+                ]
+                fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
+            fig.update_layout(barmode="group", legend_title_text="Component")
+
+        elif kind == "stacked_bar":
+            fig = go.Figure()
+            for row in rows:
+                values = [
+                    _raw_value(res.get(row.value, 0)) for res in col_results
+                ]
+                fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
+            fig.update_layout(barmode="stack", legend_title_text="Component")
+
+        elif kind == "line":
+            fig = go.Figure()
+            for row in rows:
+                values = [
+                    _raw_value(res.get(row.value, 0)) for res in col_results
+                ]
+                fig.add_trace(go.Scatter(
+                    name=row.label, x=col_labels, y=values, mode="lines+markers"
+                ))
+            fig.update_layout(legend_title_text="Component")
+
+        elif kind == "pie":
+            # Use the first scenario column; rows become pie slices
+            first_results = col_results[0] if col_results else {}
+            values = [
+                _raw_value(first_results.get(row.value, 0)) for row in rows
+            ]
+            scenario_label = col_labels[0] if col_labels else ""
+            fig = go.Figure(go.Pie(
+                labels=row_labels,
+                values=values,
+                hole=0.3,
+            ))
+            fig.update_layout(title_text=scenario_label)
+
+        else:
+            raise ValueError(f"Unknown graph kind: {kind!r}")
+
+        fig.update_layout(
+            margin={"t": 40, "b": 20, "l": 0, "r": 0},
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        return fig
+
+
+def _raw_value(value: Any) -> float:
+    """Coerce an equation result to a plain float for Plotly."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # ---------------------------------------------------------------------------
 # Root renderer
 # ---------------------------------------------------------------------------
@@ -237,6 +379,12 @@ def get_report_renderer(model: Any) -> ReportRenderer:
         elif isinstance(block, TableBlock):
             block_renderers.append(
                 TableBlockRenderer(
+                    block, model_def.equations, model_def.resolved_scenarios()
+                )
+            )
+        elif isinstance(block, GraphBlock):
+            block_renderers.append(
+                GraphBlockRenderer(
                     block, model_def.equations, model_def.resolved_scenarios()
                 )
             )

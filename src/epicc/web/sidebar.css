@@ -18,6 +18,11 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     display: none;
 }
 
+/* Weird, visually incongrous notes given by Plotly. */
+.notifier-note {
+    display: none;
+}
+
 /* Sidebar section headers */
 .sidebar-subtitle {
     background-color: #2a2a2a;
@@ -99,4 +104,27 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     .stTable {
         break-inside: avoid;
     }
+}
+
+/* Sticky parameter column for two-column layout */
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child {
+    position: sticky;
+    top: 2rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    overflow-x: visible;
+    align-self: flex-start;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+/* Hide scrollbar for parameter column */
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+}
+
+/* Ensure parameter column content has proper spacing */
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child > div {
+    padding-bottom: 1rem;
 }

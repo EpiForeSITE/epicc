@@ -530,7 +530,7 @@ def render_sidebar_parameters(
         container=ct,
     )
 
-    ct.button("Reset Parameters", on_click=_handle_reset, use_container_width=True)
+    ct.button("Reset Parameters", on_click=_handle_reset, width='stretch')
 
     return params, label_overrides, model_defaults, False
 

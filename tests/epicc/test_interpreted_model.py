@@ -8,6 +8,7 @@ from epicc.model import create_model_class, create_model_instance
 from epicc.model.base import BaseSimulationModel
 from epicc.model.schema import (
     Equation,
+    GraphBlock,
     MarkdownBlock,
     Model,
     Parameter,
@@ -236,3 +237,45 @@ class TestErrorHandling:
 
         with pytest.raises(ValueError, match="Circular dependency"):
             create_model_instance(model_def)
+
+
+class TestGraphBlocks:
+    """Test GraphBlock integration in models."""
+
+    def test_model_with_graph_block(self):
+        """Test that a model with a GraphBlock can be created and run."""
+        model_def = Model(
+            title="Graph Test Model",
+            description="Has graph blocks",
+            parameters={"x": Parameter(type="number", label="X", default=10.0)},
+            equations={
+                "a": Equation(label="A", compute="x * 2"),
+                "b": Equation(label="B", compute="x * 3"),
+            },
+            scenarios=[
+                Scenario(id="s1", label="Scenario 1", vars=ScenarioVars(factor=1)),
+                Scenario(id="s2", label="Scenario 2", vars=ScenarioVars(factor=2)),
+            ],
+            report=[
+                GraphBlock(
+                    type="graph",
+                    kind="bar",
+                    title="Test Bar Chart",
+                    rows=[
+                        TableRow(label="Val A", value="a"),
+                        TableRow(label="Val B", value="b"),
+                    ],
+                )
+            ],
+        )
+
+        model = create_model_instance(model_def)
+        assert model.human_name() == "Graph Test Model"
+
+        param_model = model.parameter_model()
+        params = param_model(x=5.0)
+        results = model.run(params)
+
+        assert "scenario_results_by_id" in results
+        assert results["scenario_results_by_id"]["s1"]["a"] == 10.0
+        assert results["scenario_results_by_id"]["s1"]["b"] == 15.0

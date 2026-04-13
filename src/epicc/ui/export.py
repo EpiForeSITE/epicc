@@ -50,7 +50,7 @@ def render_parameter_export_inline(
                 data=data,
                 file_name=f"{safe_name}_params.{suffix}",
                 mime=fmt_cls.mime_type,
-                use_container_width=True,
+                width='stretch',
                 key=f"inline_param_export_{safe_name}_{suffix}",
             )
         except Exception as exc:
@@ -67,7 +67,7 @@ def render_pdf_export_button(container: Any = None) -> None:
     clicked = rc.button(
         "Save report as PDF",
         disabled=not has_results(),
-        use_container_width=True,
+        width='stretch',
     )
     if clicked and has_results():
         st.session_state[_PRINT_REQUESTED_KEY] = True

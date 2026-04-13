@@ -348,3 +348,33 @@ report:
         value: "eq_total"
         emphasis: "strong"
 
+  - type: graph
+    kind: stacked_bar
+    title: "Cost breakdown by isolation protocol"
+    caption: "Direct costs, productivity losses, and secondary infection costs for each isolation strategy."
+    rows:
+      - label: "Direct cost of isolation"
+        value: "eq_direct"
+      - label: "Lost productivity for index case"
+        value: "eq_productivity"
+      - label: "Cost of secondary infections"
+        value: "eq_secondary"
+
+  - type: graph
+    kind: bar
+    title: "Health outcomes by isolation protocol"
+    caption: "Number of latent and active TB cases resulting from each isolation strategy."
+    rows:
+      - label: "Latent TB infections"
+        value: "eq_latent"
+      - label: "Active TB disease"
+        value: "eq_active"
+
+  - type: graph
+    kind: bar
+    title: "Total cost comparison"
+    caption: "Overall economic impact of 14-day versus 5-day isolation protocols."
+    rows:
+      - label: "Total cost"
+        value: "eq_total"
+
