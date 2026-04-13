@@ -116,7 +116,7 @@ class TableBlockRenderer(BlockRenderer):
             return
 
         try:
-            st.table(self._build_df(run_results))
+            st.dataframe(self._build_df(run_results), width='stretch')
         except Exception as exc:
             _callout("⚠️", "Table could not be rendered", str(exc))
 
