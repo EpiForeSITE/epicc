@@ -1,26 +1,45 @@
-import importlib.resources
-from pathlib import Path
-from typing import Any
+"""
+epicc.model - Model loading and execution.
 
-from epicc.formats import read_from_format
-from epicc.model.loader import get_built_in_models
+This package provides infrastructure for loading and executing epidemiological
+cost models from YAML/XLSX files with interpreted Python equations.
+"""
+
+from epicc.model.ast_validator import (
+    BLOCKED_FUNCTIONS,
+    SAFE_METHODS,
+    SAFE_NODES,
+    compile_equation,
+    validate_equation_ast,
+)
+from epicc.model.evaluator import EquationEvaluator
+from epicc.model.factory import (
+    InterpretedModelParams,
+    create_model_class,
+    create_model_instance,
+)
+from epicc.model.models import get_all_models
 from epicc.model.parameters import flatten_dict, load_model_params
 from epicc.model.schema import Model
 
-
-def load_model(name: str) -> tuple[Model, Any]:
-    # Use a Traversable for opening the resource, and a real Path/str for suffix detection.
-    config_resource = importlib.resources.files("epicc.model.models").joinpath(
-        f"{name}.yaml"
-    )
-    config_name = Path(f"{name}.yaml")
-
-    return read_from_format(config_name, config_resource.open("rb"), Model)
-
-
 __all__ = [
-    "flatten_dict",
-    "get_built_in_models",
-    "load_model",
+    # Model loading
+    "get_all_models",
+    # Model creation
+    "create_model_class",
+    "create_model_instance",
+    "InterpretedModelParams",
+    # Schema
+    "Model",
+    # Parameters
     "load_model_params",
+    "flatten_dict",
+    # Evaluation (advanced use)
+    "EquationEvaluator",
+    # Validation (for testing/debugging)
+    "validate_equation_ast",
+    "compile_equation",
+    "SAFE_NODES",
+    "BLOCKED_FUNCTIONS",
+    "SAFE_METHODS",
 ]

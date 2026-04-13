@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from epicc.config import CONFIG
 from epicc.formats import VALID_PARAMETER_SUFFIXES
 from epicc.model.base import BaseSimulationModel
-from epicc.model.loader import get_built_in_models
+from epicc.model.models import get_all_models
 from epicc.model.parameters import load_model_params
 from epicc.ui.parameters import (
     item_level,
@@ -324,10 +324,8 @@ _load_styles()
 st.sidebar.title("epicc Cost Calculator")
 st.sidebar.header("Simulation Controls")
 
-built_in_models = get_built_in_models()
-model_registry: dict[str, BaseSimulationModel] = {
-    m.human_name(): m for m in built_in_models
-}
+all_models = get_all_models()
+model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 model_labels = list(model_registry.keys())
 
 selected_label = st.sidebar.selectbox("Select Model", model_labels, index=0)

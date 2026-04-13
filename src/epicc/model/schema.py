@@ -10,13 +10,6 @@ class Author(BaseModel):
     email: str | None = None
 
 
-class Metadata(BaseModel):
-    title: str
-    description: str
-    authors: list[Author] = Field(default_factory=list)
-    introduction: str | None = None
-
-
 class Parameter(BaseModel):
     type: Literal["integer", "number", "string", "boolean"]
     label: str
@@ -68,9 +61,14 @@ class Figure(BaseModel):
 
 
 class Model(BaseModel):
-    metadata: Metadata
+    title: str
+    description: str
+    authors: list[Author] = Field(default_factory=list)
+    introduction: str | None = None
+
     parameters: dict[str, Parameter]
     equations: dict[str, Equation]
+
     table: Table
     figures: list[Figure] = Field(default_factory=list)
 
