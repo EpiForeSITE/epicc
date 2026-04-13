@@ -179,7 +179,9 @@ def _render_python_parameter_inputs(
     current_headers = model.scenario_labels
 
     def handle_reset_python() -> None:
-        reset_parameters_to_defaults(model_defaults, params, model_key)
+        reset_parameters_to_defaults(
+            model_defaults, params, model_key, param_specs=model.parameter_specs
+        )
         if not current_headers:
             return
 
@@ -209,7 +211,9 @@ def _render_python_parameter_inputs(
                     key=widget_key,
                 )
 
-    render_parameters_with_indent(model_defaults, params, model_id=model_key)
+    render_parameters_with_indent(
+        model_defaults, params, model_id=model_key, param_specs=model.parameter_specs
+    )
     return params, label_overrides, model_defaults, False
 
 

@@ -8,6 +8,7 @@ expressions with proper dependency ordering.
 from __future__ import annotations
 
 import math
+from difflib import get_close_matches
 from typing import Any
 
 from epicc.model.ast_validator import compile_equation
@@ -175,8 +176,9 @@ class EquationEvaluator:
             code_obj = self.compiled[eq_id]
 
             try:
-                # Evaluate with empty __builtins__ for safety
-                value = eval(code_obj, {"__builtins__": {}}, namespace)
+                # Evaluate with namespace as globals so generator expressions /
+                # comprehensions can access model variables in their inner scope.
+                value = eval(code_obj, {**namespace, "__builtins__": {}})
                 results[eq_id] = value
 
                 # Make result available for dependent equations
@@ -185,11 +187,17 @@ class EquationEvaluator:
             except NameError as e:
                 # More helpful error for missing parameters/equations
                 missing_var = str(e).split("'")[1] if "'" in str(e) else "unknown"
-                available = set(context.keys()) | set(results.keys())
+                available = sorted(set(context.keys()) | set(results.keys()))
+                suggestions = get_close_matches(missing_var, available, n=3, cutoff=0.6)
+                suggestion_hint = (
+                    f" Did you mean: {', '.join(repr(s) for s in suggestions)}?"
+                    if suggestions
+                    else ""
+                )
                 raise RuntimeError(
                     f"Error evaluating equation '{eq_id}': "
-                    f"undefined variable '{missing_var}'. "
-                    f"Available variables: {sorted(available)}"
+                    f"undefined variable '{missing_var}'.{suggestion_hint} "
+                    f"Available variables: {available}"
                 ) from e
 
             except Exception as e:

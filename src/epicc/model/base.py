@@ -49,3 +49,8 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
     @abstractmethod
     def build_sections(self, results: dict[str, Any]) -> list[dict[str, Any]]:
         """Transform run results into section payloads for UI rendering."""
+
+    @property
+    def parameter_specs(self) -> dict[str, Any] | None:
+        """Optional mapping of param_id to Parameter schema objects for rich UI rendering."""
+        return None

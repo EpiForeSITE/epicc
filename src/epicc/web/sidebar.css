@@ -3,6 +3,15 @@
     display: none;
 }
 
+/* Property tooltips. */
+[data-baseweb="tooltip"] {
+    /* Tooltips in sidebar are pressed against the corner, so add a little margin. */
+    margin-left: 0.5rem;
+
+    /* Add a bigger drop shadow to make it more visible against the dark sidebar background. */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
 /* Hide the "Deploy" button. */
 .stAppDeployButton {
     display: none;

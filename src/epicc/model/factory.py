@@ -156,8 +156,24 @@ def create_model_class(
         if label_overrides is None:
             label_overrides = {}
 
-        # Convert params to dict
-        param_dict = params.model_dump()
+        # Convert params to dict, coercing string values to declared types
+        _type_coerce: dict[str, type] = {
+            "integer": int,
+            "number": float,
+            "boolean": bool,
+        }
+        raw_dict = params.model_dump()
+        param_dict: dict[str, Any] = {}
+        for param_id, value in raw_dict.items():
+            param_spec = model_def.parameters.get(param_id)
+            if param_spec is not None and isinstance(value, str):
+                coerce = _type_coerce.get(param_spec.type)
+                if coerce is not None:
+                    try:
+                        value = coerce(value)
+                    except (ValueError, TypeError):
+                        pass
+            param_dict[param_id] = value
 
         # Evaluate for each scenario
         scenario_results = {}
@@ -248,6 +264,10 @@ def create_model_class(
         """Return the underlying Model schema definition."""
         return model_def
 
+    def parameter_specs(self) -> dict[str, Any]:
+        """Return the Parameter schema objects keyed by param_id."""
+        return dict(model_def.parameters)
+
     # Build the methods dictionary for the class
     methods = {
         "human_name": human_name,
@@ -261,6 +281,7 @@ def create_model_class(
         # Additional metadata methods
         "get_source_path": get_source_path,
         "get_model_definition": get_model_definition,
+        "parameter_specs": property(parameter_specs),
         # Class metadata
         "__module__": "epicc.model.factory",
         "__doc__": f"Dynamically generated model class for '{model_def.title}'",
