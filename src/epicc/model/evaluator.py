@@ -142,8 +142,7 @@ class EquationEvaluator:
 
                 raise RuntimeError(
                     f"Error evaluating equation '{eq_id}': "
-                    f"undefined variable '{missing_var}'.{suggestion_hint} "
-                    f"Available variables: {available}"
+                    f"undefined variable '{missing_var}'.{suggestion_hint}"
                 ) from e
 
             except Exception as e:
