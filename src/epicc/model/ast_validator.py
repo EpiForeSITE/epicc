@@ -3,9 +3,8 @@ from __future__ import annotations
 import ast
 import sys
 from types import CodeType
-from typing import Set
 
-_BASE_SAFE_NODES: Set[type] = {
+_BASE_SAFE_NODES: set[type] = {
     ast.Module,
     ast.Expression,
     ast.Expr,
@@ -77,11 +76,11 @@ if sys.version_info < (3, 8):
         }
     )
 
-SAFE_NODES: Set[type] = _BASE_SAFE_NODES
+SAFE_NODES: set[type] = _BASE_SAFE_NODES
 
 
 # TODO: whitelist?
-BLOCKED_FUNCTIONS: Set[str] = {
+BLOCKED_FUNCTIONS: set[str] = {
     "eval",
     "exec",
     "compile",
@@ -99,7 +98,7 @@ BLOCKED_FUNCTIONS: Set[str] = {
 
 
 # Allowed method names on objects
-SAFE_METHODS: Set[str] = {
+SAFE_METHODS: set[str] = {
     "count",
     "index",
     "get",

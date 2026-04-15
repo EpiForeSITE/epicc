@@ -178,38 +178,6 @@ report:
       - **100 Cases**: Medium outbreak
       - **803 Cases**: Large outbreak (similar to 2019 U.S. outbreak)
 
-  - type: graph
-    kind: bar
-    title: "Total cost by outbreak size"
-    caption: "Economic impact scales significantly with outbreak magnitude, driven primarily by contact tracing and quarantine costs."
-    rows:
-      - label: "Total cost"
-        value: "eq_total"
-
-  - type: markdown
-    content: |
-      ## Cost Components
-      
-      The economic burden consists of three major categories:
-      
-      - **Direct medical costs**: Hospital treatment for severe cases
-      - **Indirect productivity costs**: Lost wages during quarantine of unvaccinated contacts
-      - **Public health response costs**: Contact identification and monitoring
-
-  - type: graph
-    kind: stacked_bar
-    title: "Cost breakdown by component"
-    caption: "Contact tracing and lost productivity typically dominate costs, especially in larger outbreaks."
-    rows:
-      - label: "Hospitalization"
-        value: "eq_hosp"
-      - label: "Lost productivity"
-        value: "eq_lost_prod"
-      - label: "Contact tracing"
-        value: "eq_tracing"
-
-  - type: markdown
-    content: |
       ## Key Assumptions
       - All costs are in USD
       - Hospitalization rate and costs based on CDC surveillance data
@@ -218,7 +186,7 @@ report:
       - Wage figures represent average hourly earnings
 
   - type: table
-    caption: "Detailed cost estimates by outbreak size"
+    caption: "Estimated costs by outbreak size"
     rows:
       - label: "Hospitalization"
         value: "eq_hosp"
@@ -244,7 +212,7 @@ report:
 
   - type: graph
     kind: pie
-    title: "Cost mix - large outbreak (803 cases)"
+    title: "Cost mix — large outbreak (803 cases)"
     caption: "Proportional breakdown of cost components for the 803-case scenario."
     columns:
       - "803_cases"

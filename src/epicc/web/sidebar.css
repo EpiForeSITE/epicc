@@ -23,6 +23,11 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     display: none;
 }
 
+/* Fix model selector alignment. TODO: be more specific, `:first-child`? */
+.stVerticalBlock {
+	justify-content: center;
+}
+
 /* Sidebar section headers */
 .sidebar-subtitle {
     background-color: #2a2a2a;
