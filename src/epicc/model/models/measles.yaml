@@ -5,6 +5,16 @@ authors:
   - name: Olivia Banks
 
 parameters:
+  n_cases:
+    context: "scenario"
+    type: integer
+    label: "Number of cases"
+    description: "Number of detected measles cases in the outbreak."
+    default: 22
+    min: 1
+    max: 10000
+    unit: "cases"
+
   cost_measles_hospitalization:
     type: number
     label: "Cost of measles hospitalization"

@@ -5,6 +5,26 @@ authors:
   - name: Olivia Banks
 
 parameters:
+  isolation_days:
+    context: "scenario"
+    type: integer
+    label: "Days of isolation"
+    description: "Number of days the patient is isolated."
+    default: 14
+    min: 1
+    max: 60
+    unit: "days"
+
+  latent_multiplier:
+    context: "scenario"
+    type: number
+    label: "Latent infection multiplier"
+    description: "Multiplier for the probability of latent TB infection relative to the 14-day baseline."
+    default: 1.0
+    min: 0
+    max: 10
+    unit: "multiplier"
+
   contacts_per_case:
     type: number
     label: "Number of contacts for each released TB case"

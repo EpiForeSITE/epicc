@@ -23,6 +23,14 @@ class Parameter(BaseModel):
         None,
         description="Ordered mapping of constant->display label for enum parameters. Required when type='enum'.",
     )
+    context: Literal["equation", "scenario"] = Field(
+        "equation",
+        description=(
+            "Whether this parameter belongs to the equation context "
+            "(rendered in the normal parameter sidebar) or the scenario "
+            "context (rendered inside each scenario block)."
+        ),
+    )
     
     @model_validator(mode='after')
     def validate_enum_options(self) -> 'Parameter':
@@ -132,6 +140,34 @@ class Model(BaseModel):
     scenarios: list[Scenario]
     report: list[ReportBlock]
     figures: list[Figure] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_scenario_vars(self) -> "Model":
+        """Validate that scenario vars match corresponding scenario-context parameters."""
+        scenario_params = {
+            pid: p for pid, p in self.parameters.items() if p.context == "scenario"
+        }
+        if not scenario_params:
+            return self
+
+        for scenario in self.scenarios:
+            vars_dict = scenario.vars.model_dump()
+            for var_name, spec in scenario_params.items():
+                if var_name not in vars_dict:
+                    continue
+                value = vars_dict[var_name]
+                if spec.type in ("number", "integer") and isinstance(value, (int, float)):
+                    if spec.min is not None and value < spec.min:
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' value "
+                            f"{value} is below minimum {spec.min}"
+                        )
+                    if spec.max is not None and value > spec.max:
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' value "
+                            f"{value} exceeds maximum {spec.max}"
+                        )
+        return self
 
     def resolved_scenarios(self) -> list[Scenario]:
         return self.scenarios

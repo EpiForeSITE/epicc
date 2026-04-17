@@ -9,17 +9,22 @@ from pydantic import BaseModel, Field, create_model
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
 from epicc.model.parameters import format_value
-from epicc.model.schema import FigureBlock, MarkdownBlock, Model, TableBlock
+from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Scenario, ScenarioVars, TableBlock
 
 
 def _make_parameter_model(model_def: Model) -> type[BaseModel]:
     """
     This will dynamically create a Pydantic model class for the parameters of a
     given Model definition. Neat!
+
+    Only equation-context parameters are included; scenario-context parameters
+    are handled separately via scenario overrides.
     """
 
     fields: dict[str, Any] = {}
     for param_id, param in model_def.parameters.items():
+        if param.context == "scenario":
+            continue
         base_description = param.description or param.label
         default = param.default
 
@@ -137,7 +142,9 @@ def create_model_class(
 
     def default_params(self) -> dict[str, Any]:
         return {
-            param_id: param.default for param_id, param in model_def.parameters.items()
+            param_id: param.default
+            for param_id, param in model_def.parameters.items()
+            if param.context != "scenario"
         }
 
     def parameter_model(self) -> type[BaseModel]:
@@ -147,6 +154,7 @@ def create_model_class(
         self,
         params: BaseModel,
         label_overrides: dict[str, str] | None = None,
+        scenario_overrides: list[Scenario] | None = None,
     ) -> dict[str, Any]:
         """Execute the model for all scenarios."""
 
@@ -162,8 +170,13 @@ def create_model_class(
 
         param_dict = params.model_dump()
 
+        # Use scenario overrides if provided, otherwise use model defaults
+        if scenario_overrides is not None:
+            scenarios = scenario_overrides
+        else:
+            scenarios = model_def.resolved_scenarios()
+
         # Evaluate for each scenario
-        scenarios = model_def.resolved_scenarios()
         scenario_results: dict[str, dict[str, Any]] = {}
         scenario_results_by_id: dict[str, dict[str, Any]] = {}
         for scenario in scenarios:
@@ -281,8 +294,22 @@ def create_model_class(
         return model_def
 
     def parameter_specs(self) -> dict[str, Any]:
-        """Return the Parameter schema objects keyed by param_id."""
-        return dict(model_def.parameters)
+        """Return the Parameter schema objects keyed by param_id (equation-context only)."""
+        return {
+            k: v for k, v in model_def.parameters.items()
+            if v.context != "scenario"
+        }
+
+    def scenario_parameter_specs(self) -> dict[str, Any]:
+        """Return the Parameter schema objects for scenario-context params."""
+        return {
+            k: v for k, v in model_def.parameters.items()
+            if v.context == "scenario"
+        }
+
+    def default_scenarios(self) -> list:
+        """Return the model's default scenario list."""
+        return list(model_def.resolved_scenarios())
 
     def parameter_groups(self) -> list | None:
         """Return the parameter group tree, or None if not defined."""
@@ -300,6 +327,8 @@ def create_model_class(
         "get_source_path": get_source_path,
         "get_model_definition": get_model_definition,
         "parameter_specs": property(parameter_specs),
+        "scenario_parameter_specs": property(scenario_parameter_specs),
+        "default_scenarios": property(default_scenarios),
         "parameter_groups": property(parameter_groups),
         # Class metadata
         "__module__": "epicc.model.factory",

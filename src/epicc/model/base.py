@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from epicc.model.schema import Parameter, Scenario
 
 ParamsT = TypeVar("ParamsT", bound=BaseModel)
 
@@ -35,6 +38,7 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
         self,
         params: ParamsT,
         label_overrides: dict[str, str] | None = None,
+        scenario_overrides: list[Scenario] | None = None,
     ) -> dict[str, Any]:
         """Run the model and return result payload for rendering."""
 
@@ -54,6 +58,16 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
     @property
     def parameter_groups(self) -> list | None:
         """Optional parameter group tree for visual organization in the UI."""
+        return None
+
+    @property
+    def scenario_parameter_specs(self) -> dict[str, Parameter] | None:
+        """Optional mapping of scenario-context param_id to Parameter schema objects."""
+        return None
+
+    @property
+    def default_scenarios(self) -> list[Scenario] | None:
+        """Default scenarios for this model, if any."""
         return None
 
     def get_model_definition(self) -> Any:
