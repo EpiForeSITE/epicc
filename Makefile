@@ -34,6 +34,10 @@ serve: build ## Serve the stlite static build
 dev: ## Run normal Streamlit locally
 	$(UV) run streamlit run $(APP_PY)
 
+.PHONY: editor
+editor: ## Run the model editor app
+	$(UV) run streamlit run editor.py
+
 .PHONY: stlite
 stlite: setup serve ## Install, build, and serve the stlite app
 
