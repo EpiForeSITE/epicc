@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, create_model
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
 from epicc.model.parameters import format_value
-from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Scenario, ScenarioVars, TableBlock
+from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Scenario, TableBlock
 
 
 def _make_parameter_model(model_def: Model) -> type[BaseModel]:

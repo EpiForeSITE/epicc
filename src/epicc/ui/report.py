@@ -74,18 +74,19 @@ class TableBlockRenderer(BlockRenderer):
             st.caption(self._block.caption)
 
     def _build_df(self, run_results: dict[str, Any]) -> pd.DataFrame:
+        scenarios = run_results.get("scenarios", self._scenarios)
         by_id: dict[str, dict] = run_results.get("scenario_results_by_id", {})
         overrides: dict[str, str] = run_results.get("label_overrides", {})
 
         # Determine column order
         if self._block.columns is not None:
             col_pairs = [
-                (sid, next((s for s in self._scenarios if s.id == sid), None))
+                (sid, next((s for s in scenarios if s.id == sid), None))
                 for sid in self._block.columns
                 if sid in by_id
             ]
         else:
-            col_pairs = [(s.id, s) for s in self._scenarios]
+            col_pairs = [(s.id, s) for s in scenarios]
 
         col_labels = [
             overrides.get(sid, s.label if s else sid) for sid, s in col_pairs
@@ -190,17 +191,18 @@ class GraphBlockRenderer(BlockRenderer):
         self, run_results: dict[str, Any]
     ) -> tuple[list[str], list[str], list[dict[str, Any]]]:
         """Return (scenario_ids, scenario_labels, eq_results_per_scenario)."""
+        scenarios = run_results.get("scenarios", self._scenarios)
         by_id: dict[str, dict] = run_results.get("scenario_results_by_id", {})
         overrides: dict[str, str] = run_results.get("label_overrides", {})
 
         if self._block.columns is not None:
             pairs = [
-                (sid, next((s for s in self._scenarios if s.id == sid), None))
+                (sid, next((s for s in scenarios if s.id == sid), None))
                 for sid in self._block.columns
                 if sid in by_id
             ]
         else:
-            pairs = [(s.id, s) for s in self._scenarios]
+            pairs = [(s.id, s) for s in scenarios]
 
         ids = [sid for sid, _ in pairs]
         labels = [overrides.get(sid, s.label if s else sid) for sid, s in pairs]
