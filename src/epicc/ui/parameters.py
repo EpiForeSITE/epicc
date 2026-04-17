@@ -67,21 +67,26 @@ def _render_spec_widget(
     spec: Parameter,
     default_value: Any,
     widget_key: str,
-    params: dict[str, Any],
+    params: dict[str, Any] | None,
     container: Any,
 ) -> None:
-    """Render a typed widget for a parameter with a full schema spec."""
+    """Render a typed widget for a parameter with a full schema spec.
+
+    When *params* is not ``None`` the widget value is stored in
+    ``params[param_id]``.  Pass ``None`` when the caller only needs
+    Streamlit session-state (e.g. the scenario editor).
+    """
     display_label = spec.label
     help_text = _build_help_text(spec)
 
     if spec.type == "boolean":
         native_default = _native_value(default_value, spec)
         if widget_key in st.session_state:
-            params[param_id] = container.checkbox(
+            result = container.checkbox(
                 display_label, key=widget_key, help=help_text
             )
         else:
-            params[param_id] = container.checkbox(
+            result = container.checkbox(
                 display_label, value=native_default, key=widget_key, help=help_text
             )
 
@@ -104,7 +109,7 @@ def _render_spec_widget(
         if widget_key not in st.session_state:
             kwargs["value"] = native_default
 
-        params[param_id] = container.number_input(**kwargs)
+        result = container.number_input(**kwargs)
 
     elif spec.type == "enum" and spec.options:
         option_keys = list(spec.options.keys())
@@ -120,21 +125,24 @@ def _render_spec_widget(
                 selectbox_kwargs["index"] = option_keys.index(str(default_value))
             except ValueError:
                 selectbox_kwargs["index"] = 0
-        params[param_id] = container.selectbox(**selectbox_kwargs)
+        result = container.selectbox(**selectbox_kwargs)
 
     else:
         # string
         if widget_key in st.session_state:
-            params[param_id] = container.text_input(
+            result = container.text_input(
                 display_label, key=widget_key, help=help_text
             )
         else:
-            params[param_id] = container.text_input(
+            result = container.text_input(
                 display_label,
                 value=str(default_value),
                 key=widget_key,
                 help=help_text,
             )
+
+    if params is not None:
+        params[param_id] = result
 
 
 def _render_param(
@@ -522,9 +530,8 @@ def _render_scenario_editor(
             # Variable inputs (using the same typed widgets as parameters)
             for var_name, spec in specs.items():
                 var_key = _scenario_var_key(model_key, i, var_name)
-                throwaway: dict[str, Any] = {}
                 _render_spec_widget(
-                    var_name, spec, spec.default, var_key, throwaway, st
+                    var_name, spec, spec.default, var_key, None, st
                 )
 
             if i < count - 1:

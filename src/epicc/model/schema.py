@@ -156,16 +156,45 @@ class Model(BaseModel):
                 if var_name not in vars_dict:
                     continue
                 value = vars_dict[var_name]
-                if spec.type in ("number", "integer") and isinstance(value, (int, float)):
-                    if spec.min is not None and value < spec.min:
+                coerced_value = value
+
+                if spec.type == "integer":
+                    if isinstance(value, bool):
                         raise ValueError(
-                            f"Scenario '{scenario.id}' var '{var_name}' value "
-                            f"{value} is below minimum {spec.min}"
+                            f"Scenario '{scenario.id}' var '{var_name}' must be an integer, "
+                            f"got {value!r}"
                         )
-                    if spec.max is not None and value > spec.max:
+                    try:
+                        coerced_value = int(value)
+                    except (TypeError, ValueError):
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' must be an integer, "
+                            f"got {value!r}"
+                        ) from None
+                elif spec.type == "number":
+                    if isinstance(value, bool):
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' must be a number, "
+                            f"got {value!r}"
+                        )
+                    try:
+                        coerced_value = float(value)
+                    except (TypeError, ValueError):
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' must be a number, "
+                            f"got {value!r}"
+                        ) from None
+
+                if spec.type in ("number", "integer"):
+                    if spec.min is not None and coerced_value < spec.min:
                         raise ValueError(
                             f"Scenario '{scenario.id}' var '{var_name}' value "
-                            f"{value} exceeds maximum {spec.max}"
+                            f"{coerced_value} is below minimum {spec.min}"
+                        )
+                    if spec.max is not None and coerced_value > spec.max:
+                        raise ValueError(
+                            f"Scenario '{scenario.id}' var '{var_name}' value "
+                            f"{coerced_value} exceeds maximum {spec.max}"
                         )
         return self
 

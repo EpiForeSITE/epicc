@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, create_model
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
 from epicc.model.parameters import format_value
-from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Scenario, TableBlock
+from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Parameter, Scenario, TableBlock
 
 
 def _make_parameter_model(model_def: Model) -> type[BaseModel]:
@@ -301,7 +301,7 @@ def create_model_class(
             if v.context != "scenario"
         }
 
-    def scenario_parameter_specs(self) -> dict[str, Any]:
+    def scenario_parameter_specs(self) -> dict[str, Parameter]:
         """Return the Parameter schema objects for scenario-context params."""
         return {
             k: v
@@ -309,7 +309,7 @@ def create_model_class(
             if v.context == "scenario"
         }
 
-    def default_scenarios(self) -> list:
+    def default_scenarios(self) -> list[Scenario]:
         """Return the model's default scenario list."""
         return list(model_def.resolved_scenarios())
 

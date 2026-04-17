@@ -160,6 +160,78 @@ class TestScenarioVarValidation:
         )
         assert m.scenarios[0].vars.model_dump()["x"] == 999.0
 
+    def test_scenario_var_boolean_rejected_for_integer(self):
+        """A boolean value for an integer scenario parameter should be rejected."""
+        with pytest.raises(ValueError, match="must be an integer"):
+            Model(
+                title="Bad",
+                description="",
+                parameters={
+                    "x": Parameter(
+                        type="integer", label="X", default=5, min=1, max=100, context="scenario"
+                    ),
+                },
+                equations={"eq": Equation(label="E", compute="x")},
+                scenarios=[
+                    Scenario(id="s1", label="S1", vars=ScenarioVars(x=True)),
+                ],
+                report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+            )
+
+    def test_scenario_var_boolean_rejected_for_number(self):
+        """A boolean value for a number scenario parameter should be rejected."""
+        with pytest.raises(ValueError, match="must be a number"):
+            Model(
+                title="Bad",
+                description="",
+                parameters={
+                    "x": Parameter(
+                        type="number", label="X", default=5.0, min=0, max=10, context="scenario"
+                    ),
+                },
+                equations={"eq": Equation(label="E", compute="x")},
+                scenarios=[
+                    Scenario(id="s1", label="S1", vars=ScenarioVars(x=False)),
+                ],
+                report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+            )
+
+    def test_scenario_var_string_coerced_for_integer(self):
+        """A string-encoded integer should be coerced and validated."""
+        with pytest.raises(ValueError, match="below minimum"):
+            Model(
+                title="Bad",
+                description="",
+                parameters={
+                    "x": Parameter(
+                        type="integer", label="X", default=5, min=1, max=100, context="scenario"
+                    ),
+                },
+                equations={"eq": Equation(label="E", compute="x")},
+                scenarios=[
+                    Scenario(id="s1", label="S1", vars=ScenarioVars(x="0")),
+                ],
+                report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+            )
+
+    def test_scenario_var_non_numeric_string_rejected_for_integer(self):
+        """A non-numeric string for an integer scenario parameter should be rejected."""
+        with pytest.raises(ValueError, match="must be an integer"):
+            Model(
+                title="Bad",
+                description="",
+                parameters={
+                    "x": Parameter(
+                        type="integer", label="X", default=5, min=1, max=100, context="scenario"
+                    ),
+                },
+                equations={"eq": Equation(label="E", compute="x")},
+                scenarios=[
+                    Scenario(id="s1", label="S1", vars=ScenarioVars(x="abc")),
+                ],
+                report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+            )
+
 
 # ---------------------------------------------------------------------------
 # Tests: Factory filtering
