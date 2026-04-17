@@ -46,6 +46,22 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
     def parameter_model(self) -> type[ParamsT]:
         """Return a Pydantic model used to validate uploaded parameter files."""
 
-    @abstractmethod
-    def build_sections(self, results: dict[str, Any]) -> list[dict[str, Any]]:
-        """Transform run results into section payloads for UI rendering."""
+    @property
+    def parameter_specs(self) -> dict[str, Any] | None:
+        """Optional mapping of param_id to Parameter schema objects for rich UI rendering."""
+        return None
+
+    @property
+    def parameter_groups(self) -> list | None:
+        """Optional parameter group tree for visual organization in the UI."""
+        return None
+
+    def get_model_definition(self) -> Any:
+        """Return model definition for report generation (optional, for YAML-compiled models)."""
+        raise NotImplementedError(
+            "get_model_definition() is only available for YAML-compiled models"
+        )
+
+    def get_source_path(self) -> str | None:
+        """Return source file path for debugging/introspection (optional)."""
+        return None

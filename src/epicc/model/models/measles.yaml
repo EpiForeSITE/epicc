@@ -1,0 +1,240 @@
+title: "Measles Outbreak Cost Estimation"
+description: "Estimates hospitalization, tracing, and productivity costs for measles outbreaks across three outbreak-size scenarios."
+authors:
+  - name: Edward Wang
+  - name: Olivia Banks
+
+parameters:
+  cost_measles_hospitalization:
+    type: number
+    label: "Cost of measles hospitalization"
+    description: "Average direct medical cost per hospitalized measles case, including hospital stay, treatments, and complications."
+    default: 31168
+    min: 0
+    max: 500000
+    unit: "USD"
+    references:
+      - "Ortega-Sanchez et al. (2014). Economics of an outbreak: Cost of measles. Vaccine, 32(34)."
+
+  proportion_hospitalized:
+    type: number
+    label: "Proportion of cases hospitalized"
+    description: "Fraction of confirmed measles cases requiring hospital admission."
+    default: 0.20
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "CDC Measles surveillance data (2018-2019)."
+
+  proportion_missed_workdays:
+    type: number
+    label: "Proportion of quarantine days that would be a missed day of work"
+    description: "Fraction of quarantine period that falls on workdays (accounting for weekends and non-working contacts)."
+    default: 0.5
+    min: 0
+    max: 1
+    unit: "proportion"
+
+  hourly_wage_worker:
+    type: number
+    label: "Hourly wage for worker"
+    description: "Average hourly wage for calculating lost productivity during quarantine."
+    default: 29.36
+    min: 0
+    max: 500
+    unit: "USD/hour"
+    references:
+      - "U.S. Bureau of Labor Statistics (2024)."
+
+  hourly_wage_contract_tracer:
+    type: number
+    label: "Hourly wage for contract tracer"
+    description: "Hourly wage for public health contact tracers."
+    default: 40.00
+    min: 0
+    max: 200
+    unit: "USD/hour"
+    references:
+      - "Bureau of Labor Statistics median for epidemiologists/health educators (2024)."
+
+  hours_contact_tracing_per_contact:
+    type: number
+    label: "Hours of contact tracing per contact"
+    description: "Staff time required to identify, notify, and monitor each contact."
+    default: 0.832
+    min: 0
+    max: 40
+    unit: "hours"
+    references:
+      - "CDC Contact Tracing Guidelines for Measles."
+
+  contacts_per_case:
+    type: number
+    label: "Number of contacts per case"
+    description: "Average number of close contacts identified per confirmed measles case."
+    default: 141.5
+    min: 0
+    max: 500
+    unit: "contacts"
+    references:
+      - "Parker et al. (2006). Implications of a 2005 measles outbreak in Indiana for sustained elimination. NEJM."
+
+  vaccination_rate:
+    type: number
+    label: "Vaccination rate in community"
+    description: "Proportion of population with measles immunity (through vaccination or prior infection). Only unvaccinated contacts require quarantine."
+    default: 0.8
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "CDC National Immunization Survey (2023)."
+
+  quarantine_days:
+    type: integer
+    label: "Length of quarantine (days)"
+    description: "Number of days unvaccinated contacts must quarantine to prevent disease spread."
+    default: 21
+    min: 0
+    max: 30
+    unit: "days"
+    references:
+      - "CDC Measles quarantine guidelines (21 days from last exposure)."
+
+groups:
+  - label: "Medical Costs"
+    children:
+      - cost_measles_hospitalization
+      - proportion_hospitalized
+  - label: "Lost Productivity"
+    children:
+      - proportion_missed_workdays
+      - hourly_wage_worker
+      - quarantine_days
+      - vaccination_rate
+  - label: "Contact Tracing"
+    children:
+      - contacts_per_case
+      - hours_contact_tracing_per_contact
+      - hourly_wage_contract_tracer
+
+equations:
+  eq_hosp:
+    label: "Hospitalization cost"
+    unit: "USD"
+    output: "number"
+    compute: |
+      n_cases * proportion_hospitalized * cost_measles_hospitalization
+
+  eq_lost_prod:
+    label: "Lost productivity"
+    unit: "USD"
+    output: "number"
+    compute: |
+      n_cases * contacts_per_case * (1 - vaccination_rate) * quarantine_days * proportion_missed_workdays * hourly_wage_worker
+
+  eq_tracing:
+    label: "Contact tracing cost"
+    unit: "USD"
+    output: "number"
+    compute: |
+      n_cases * contacts_per_case * hours_contact_tracing_per_contact * hourly_wage_contract_tracer
+
+  eq_total:
+    label: "Total cost"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_hosp + eq_lost_prod + eq_tracing
+
+scenarios:
+  - id: "22_cases"
+    label: "22 Cases"
+    vars:
+      n_cases: 22
+  - id: "100_cases"
+    label: "100 Cases"
+    vars:
+      n_cases: 100
+  - id: "803_cases"
+    label: "803 Cases"
+    vars:
+      n_cases: 803
+
+figures: []
+
+report:
+  - type: markdown
+    content: |
+      ## Overview
+      This calculator estimates the economic burden of measles outbreaks by modeling three
+      key cost components: direct medical costs (hospitalization), indirect costs (lost
+      productivity from quarantine), and public health response costs (contact tracing).
+
+      ## Scenarios
+      The model evaluates three outbreak scenarios based on historical U.S. measles outbreaks:
+      - **22 Cases**: Small outbreak (typical in high-vaccination areas)
+      - **100 Cases**: Medium outbreak
+      - **803 Cases**: Large outbreak (similar to 2019 U.S. outbreak)
+
+      ## Key Assumptions
+      - All costs are in USD
+      - Hospitalization rate and costs based on CDC surveillance data
+      - Contact tracing effort scales linearly with case count
+      - Lost productivity only counts quarantined unvaccinated contacts
+      - Wage figures represent average hourly earnings
+
+  - type: table
+    caption: "Estimated costs by outbreak size"
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+      - label: "TOTAL"
+        value: "eq_total"
+        emphasis: "strong"
+
+  - type: graph
+    kind: stacked_bar
+    title: "Cost breakdown by outbreak size"
+    caption: "Stacked cost components across the three outbreak scenarios."
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+
+  - type: graph
+    kind: pie
+    title: "Cost mix - large outbreak (803 cases)"
+    caption: "Proportional breakdown of cost components for the 803-case scenario."
+    columns:
+      - "803_cases"
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+
+  - type: graph
+    kind: line
+    title: "Cost scaling by outbreak size"
+    caption: "How each cost component scales with outbreak magnitude."
+    rows:
+      - label: "Hospitalization"
+        value: "eq_hosp"
+      - label: "Lost productivity"
+        value: "eq_lost_prod"
+      - label: "Contact tracing"
+        value: "eq_tracing"
+      - label: "Total"
+        value: "eq_total"
+

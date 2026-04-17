@@ -9,6 +9,26 @@ from epicc.formats import get_format
 from epicc.model.base import BaseSimulationModel
 
 
+def format_value(value: Any, equation_spec: Any = None) -> str:
+    """Format a computed value for display in tables."""
+    if isinstance(value, (int, float)):
+        is_currency = equation_spec and getattr(equation_spec, "unit", None) in (
+            "USD",
+            "dollars",
+            "$",
+        )
+        if abs(value) >= 1000:
+            formatted = f"{value:,.0f}"
+        elif abs(value) >= 100:
+            formatted = f"{value:,.2f}"
+        elif abs(value) >= 1:
+            formatted = f"{value:.2f}"
+        else:
+            formatted = f"{value:.4f}"
+        return f"${formatted}" if is_currency else formatted
+    return str(value)
+
+
 def flatten_dict(data: dict[str, Any], level: int = 0) -> dict[str, Any]:
     """Flatten nested dictionaries for the sidebar renderer using tab-indented labels."""
 

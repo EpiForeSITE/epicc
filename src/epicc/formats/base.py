@@ -11,6 +11,11 @@ class BaseFormat(ABC, Generic[T]):
     Abstract base class for parameter file formats.
     """
 
+    #: MIME type string used when offering the format as a download.
+    mime_type: str = "application/octet-stream"
+    #: Short human-readable name for the format (e.g. ``"YAML"`` or ``"Excel"``).
+    label: str = ""
+
     def __init__(self, path: Path | str) -> None:
         """
         Initialize the reader.

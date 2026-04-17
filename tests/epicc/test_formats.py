@@ -1,5 +1,3 @@
-"""Tests for epicc.formats (get_format, read_from_format)."""
-
 from io import BytesIO
 
 import pytest

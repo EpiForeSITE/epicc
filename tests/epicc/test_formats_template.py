@@ -1,5 +1,3 @@
-"""Integration tests for epicc.formats.template (generate_template)."""
-
 from io import BytesIO
 from typing import Literal
 
@@ -9,10 +7,6 @@ from pydantic import BaseModel, Field
 from epicc.formats.template import generate_template
 from epicc.formats.xlsx import XLSXFormat
 from epicc.formats.yaml import YAMLFormat
-
-# ---------------------------------------------------------------------------
-# Test models
-# ---------------------------------------------------------------------------
 
 
 class _Inner(BaseModel):
@@ -26,11 +20,6 @@ class _Outer(BaseModel):
     inner: _Inner
     theme: Literal["light", "dark"] = "light"
     note: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# YAML
-# ---------------------------------------------------------------------------
 
 
 def test_yaml_template_contains_defaults():
@@ -56,11 +45,6 @@ def test_yaml_template_placeholder_for_required_fields():
 
     assert data["name"] == ""
     assert data["inner"]["rate"] == 0.0
-
-
-# ---------------------------------------------------------------------------
-# XLSX
-# ---------------------------------------------------------------------------
 
 
 def _read_xlsx_rows(data: bytes) -> dict[str, tuple]:

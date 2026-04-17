@@ -29,10 +29,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Install dependencies and run tests
+      - name: Install dependencies and run checks
         run: |
           docker run --rm --user root \
             -v "$PWD:/workspaces/${{ github.event.repository.name }}" \
             -w /workspaces/${{ github.event.repository.name }} \
             epicc:local \
-            sh -c "uv sync --frozen && uv run pytest"
+            sh -c "uv sync --frozen && make check"

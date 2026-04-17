@@ -13,7 +13,7 @@ organize parameters in that format.
 """
 
 from pathlib import Path
-from typing import IO, Any, TypeVar
+from typing import IO, Any, Iterator, TypeVar
 
 from pydantic import BaseModel
 
@@ -31,7 +31,21 @@ _FORMATS: dict[str, type[BaseFormat]] = {
     ".xlsx": XLSXFormat,
 }
 
-VALID_PARAMETER_SUFFIXES = set(k[1:] for k in _FORMATS.keys())
+
+def iter_formats() -> Iterator[tuple[str, type[BaseFormat]]]:
+    """Yield ``(suffix, format_class)`` for every entry in the format registry.
+
+    Suffixes are returned with their leading dot (e.g. ``".yaml"``, ``".xlsx"``).
+    Aliases such as ".yml" are included - callers that need unique classes
+    can deduplicate using a ``seen`` set.
+
+    Use this function everywhere format-registry iteration is needed instead of
+    accessing ``_FORMATS`` directly.
+    """
+    yield from _FORMATS.items()
+
+
+VALID_PARAMETER_SUFFIXES = {s.lstrip(".") for s, _ in iter_formats()}
 """Set of valid file suffixes for parameter files. These do not begin with a dot."""
 
 
@@ -51,7 +65,7 @@ def get_format(path: Path | str) -> BaseFormat:
     suffix = Path(path).suffix.lower()  # calling constructor to handle `str` case.
     reader_class = _FORMATS.get(suffix)
     if reader_class is None:
-        supported = ", ".join(_FORMATS.keys())
+        supported = ", ".join(s for s, _ in iter_formats())
         raise ValueError(
             f"Unsupported file format '{suffix}'. Supported formats: {supported}"
         )
@@ -94,6 +108,7 @@ __all__ = [
     "XLSXFormat",
     "generate_template",
     "get_format",
+    "iter_formats",
     "opaque_to_typed",
     "read_from_format",
 ]

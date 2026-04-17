@@ -22,7 +22,7 @@ install: ## Install Python dependencies with uv
 	$(UV) sync
 
 .PHONY: build
-build: $(DIST_DIR) ## Generate the bundle.
+build: ## Generate the bundle.
 	mkdir -p $(DIST_DIR)
 	$(UV) run scripts/build.py --app $(APP_PY) --out $(DIST_DIR)
 

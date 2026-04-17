@@ -173,6 +173,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "plotly" },
     { name = "pydantic" },
     { name = "ruamel-yaml" },
     { name = "streamlit" },
@@ -183,6 +184,7 @@ dev = [
     { name = "mypy" },
     { name = "pandas-stubs" },
     { name = "playwright" },
+    { name = "plotly-stubs" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "types-openpyxl" },
@@ -194,6 +196,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "pandas", specifier = ">=2.3.0" },
+    { name = "plotly", specifier = ">=6.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "streamlit", specifier = ">=1.55.0" },
@@ -204,6 +207,7 @@ dev = [
     { name = "mypy", specifier = ">=1.20.0" },
     { name = "pandas-stubs", specifier = ">=3.0.0.260204" },
     { name = "playwright", specifier = ">=1.58.0" },
+    { name = "plotly-stubs", specifier = ">=0.1.3" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "ruff", specifier = ">=0.15.6" },
     { name = "types-openpyxl", specifier = ">=3.1.0.20240106" },
@@ -772,6 +776,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0e/4b/236e60ab9f6d62ed0fd32150d61f1f494cefbf02304c0061e78ed80c1c32/playwright-1.58.0-py3-none-win32.whl", hash = "sha256:1e03be090e75a0fabbdaeab65ce17c308c425d879fa48bb1d7986f96bfad0b99", size = 36815998, upload-time = "2026-01-30T15:09:39.627Z" },
     { url = "https://files.pythonhosted.org/packages/41/f8/5ec599c5e59d2f2f336a05b4f318e733077cd5044f24adb6f86900c3e6a7/playwright-1.58.0-py3-none-win_amd64.whl", hash = "sha256:a2bf639d0ce33b3ba38de777e08697b0d8f3dc07ab6802e4ac53fb65e3907af8", size = 36816005, upload-time = "2026-01-30T15:09:42.449Z" },
     { url = "https://files.pythonhosted.org/packages/c8/c4/cc0229fea55c87d6c9c67fe44a21e2cd28d1d558a5478ed4d617e9fb0c93/playwright-1.58.0-py3-none-win_arm64.whl", hash = "sha256:32ffe5c303901a13a0ecab91d1c3f74baf73b84f4bedbb6b935f5bc11cc98e1b", size = 33085919, upload-time = "2026-01-30T15:09:45.71Z" },
+]
+
+[[package]]
+name = "plotly"
+version = "6.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "narwhals" },
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/7f/0f100df1172aadf88a929a9dbb902656b0880ba4b960fe5224867159d8f4/plotly-6.7.0.tar.gz", hash = "sha256:45eea0ff27e2a23ccd62776f77eb43aa1ca03df4192b76036e380bb479b892c6", size = 6911286, upload-time = "2026-04-09T20:36:45.738Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/ad/cba91b3bcf04073e4d1655a5c1710ef3f457f56f7d1b79dcc3d72f4dd912/plotly-6.7.0-py3-none-any.whl", hash = "sha256:ac8aca1c25c663a59b5b9140a549264a5badde2e057d79b8c772ae2920e32ff0", size = 9898444, upload-time = "2026-04-09T20:36:39.812Z" },
+]
+
+[[package]]
+name = "plotly-stubs"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/81/d5c11003990432c57e5e12b22a7f4388691ec67deeb5c8a13b0e775870bd/plotly_stubs-0.1.3.tar.gz", hash = "sha256:258b40a9099459cf526c587be12c7098376a144fb6c9de4442363a7d30fb118b", size = 169845, upload-time = "2026-04-11T14:56:01.059Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/70/dbd075a1d475b7e253f48a808cc1670f574a808ee1b13f42650bb355eee0/plotly_stubs-0.1.3-py3-none-any.whl", hash = "sha256:dfc69c2777e10236a56fa715d0155727f80086ca5f67d36bc65ba18569b3e761", size = 106211, upload-time = "2026-04-11T14:55:59.748Z" },
 ]
 
 [[package]]

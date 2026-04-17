@@ -1,0 +1,398 @@
+title: "TB Isolation Cost Estimation"
+description: "Estimates hospitalization, tracing, and productivity costs for TB isolation scenarios, comparing 14-day vs. 5-day isolation protocols."
+authors:
+  - name: Edward Wang
+  - name: Olivia Banks
+
+parameters:
+  contacts_per_case:
+    type: number
+    label: "Number of contacts for each released TB case"
+    description: "Average number of close contacts exposed to each TB patient upon release from isolation."
+    default: 141.5
+    min: 0
+    max: 500
+    unit: "contacts"
+    references:
+      - "CDC TB contact investigation guidelines."
+
+  prob_latent_if_14_day:
+    type: number
+    label: "Probability that contact develops latent TB if 14-day isolation"
+    description: "Baseline probability that an exposed contact develops latent TB infection when the index case completes 14-day isolation."
+    default: 0.02
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "TB transmission studies (standard isolation protocol)."
+
+  infectiousness_multiplier:
+    type: number
+    label: "Multiplier for infectiousness with 5-day vs. 14-day isolation"
+    description: "Factor by which infectiousness increases when using 5-day instead of 14-day isolation."
+    default: 1.5
+    min: 0
+    max: 10
+    unit: "multiplier"
+    references:
+      - "Modeling studies of TB isolation duration and transmission risk."
+
+  workday_ratio:
+    type: number
+    label: "Ratio of workdays to total days"
+    description: "Fraction of days that are workdays (accounting for weekends and holidays)."
+    default: 0.714
+    min: 0
+    max: 1
+    unit: "proportion"
+
+  prob_latent_to_active_2yr:
+    type: number
+    label: "First 2 years"
+    description: "Probability that latent TB progresses to active disease within the first 2 years after infection."
+    default: 0.05
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "Horsburgh CR Jr. (2004). Priorities for the treatment of latent tuberculosis infection. NEJM."
+
+  prob_latent_to_active_lifetime:
+    type: number
+    label: "Rest of lifetime (prob_latent_to_active_lifetime)"
+    description: "Probability that latent TB progresses to active disease during the remainder of the person's life (after first 2 years)."
+    default: 0.05
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "Horsburgh CR Jr. (2004). Priorities for the treatment of latent tuberculosis infection. NEJM."
+
+  cost_latent:
+    type: number
+    label: "Cost of latent TB infection"
+    description: "Direct medical cost of diagnosing and treating one case of latent TB infection."
+    default: 300.0
+    min: 0
+    max: 10000
+    unit: "USD"
+    references:
+      - "CDC TB treatment cost estimates."
+
+  cost_active:
+    type: number
+    label: "Cost of active TB infection"
+    description: "Direct medical cost of treating one case of active TB disease, including hospitalization, medications, and monitoring."
+    default: 34523.0
+    min: 0
+    max: 100000
+    unit: "USD"
+    references:
+      - "Marks SM et al. (2014). Costs of active tuberculosis treatment in the United States. IJTLD."
+
+  isolation_type:
+    type: enum
+    label: "Isolation type"
+    description: "Type of isolation setting for the patient."
+    default: HOME_ISO
+    options:
+      HOSP_ISO: "Hospital"
+      MOTEL_ISO: "Motel, with nurse"
+      HOME_ISO: "Home, with nurse"
+
+  isolation_cost:
+    type: number
+    label: "Daily isolation cost"
+    description: "Daily cost for hospital isolation (used when isolation_type=HOSP_ISO and direct_medical_cost_day=0)."
+    default: 85.0
+    min: 0
+    max: 10000
+    unit: "USD/day"
+
+  direct_medical_cost_day:
+    type: number
+    label: "Direct medical cost of a day of isolation"
+    description: "Daily direct medical cost for hospital isolation (used when isolation_type=HOSP_ISO and >0)."
+    default: 3996.0
+    min: 0
+    max: 20000
+    unit: "USD/day"
+    references:
+      - "Hospital cost data for TB isolation rooms."
+
+  motel_room_cost:
+    type: number
+    label: "Cost of motel room per day"
+    description: "Daily cost of motel room rental for isolation (used when isolation_type=MOTEL_ISO)."
+    default: 150.0
+    min: 0
+    max: 1000
+    unit: "USD/day"
+
+  hourly_wage_worker:
+    type: number
+    label: "Hourly wage for worker"
+    description: "Average hourly wage for calculating lost productivity during isolation."
+    default: 29.36
+    min: 0
+    max: 500
+    unit: "USD/hour"
+    references:
+      - "U.S. Bureau of Labor Statistics (2024)."
+
+  hourly_wage_nurse:
+    type: number
+    label: "Hourly wage for nurse"
+    description: "Hourly wage for nurse conducting check-ins for motel or home isolation."
+    default: 42.42
+    min: 0
+    max: 200
+    unit: "USD/hour"
+    references:
+      - "Bureau of Labor Statistics median for registered nurses (2024)."
+
+  nurse_checkin_hours:
+    type: number
+    label: "Time for nurse to check in w/ pt in motel or home (hrs)"
+    description: "Hours required for each nurse check-in visit (including travel time)."
+    default: 2
+    min: 0
+    max: 24
+    unit: "hours"
+
+  discount_rate:
+    type: number
+    label: "Discount rate"
+    description: "Annual discount rate for calculating present value of future costs (typically 3% for health economics)."
+    default: 0.03
+    min: 0
+    max: 0.10
+    unit: "proportion"
+    references:
+      - "Standard health economics discount rate (3% per year)."
+
+  remaining_years_of_life:
+    type: integer
+    label: "Remaining years of life"
+    description: "Expected remaining years of life for TB patients/contacts (used to calculate discounted lifetime costs)."
+    default: 40
+    min: 1
+    max: 100
+    unit: "years"
+
+groups:
+  - label: "Transmission"
+    children:
+      - contacts_per_case
+      - prob_latent_if_14_day
+      - infectiousness_multiplier
+  - label: "Disease Progression"
+    children:
+      - prob_latent_to_active_2yr
+      - prob_latent_to_active_lifetime
+  - label: "Isolation Costs"
+    children:
+      - isolation_type
+      - label: "Hospital"
+        children:
+          - direct_medical_cost_day
+          - isolation_cost
+      - label: "Motel / Home"
+        children:
+          - motel_room_cost
+          - hourly_wage_nurse
+          - nurse_checkin_hours
+  - label: "Secondary Infection Costs"
+    children:
+      - cost_latent
+      - cost_active
+      - discount_rate
+      - remaining_years_of_life
+  - label: "Productivity"
+    children:
+      - hourly_wage_worker
+      - workday_ratio
+
+equations:
+  eq_latent_baseline:
+    label: "Baseline latent TB infections"
+    unit: "cases"
+    output: "number"
+    compute: |
+      contacts_per_case * prob_latent_if_14_day
+
+  eq_latent:
+    label: "Latent TB infections"
+    unit: "cases"
+    output: "number"
+    compute: |
+      eq_latent_baseline * latent_multiplier
+
+  eq_active:
+    label: "Active TB disease"
+    unit: "cases"
+    output: "number"
+    compute: |
+      eq_latent * prob_latent_to_active_2yr + eq_latent * (1 - prob_latent_to_active_2yr) * prob_latent_to_active_lifetime
+
+  eq_daily_cost:
+    label: "Daily isolation cost"
+    unit: "USD/day"
+    output: "number"
+    compute: |
+      (direct_medical_cost_day if (isolation_type == "HOSP_ISO" and direct_medical_cost_day > 0) else (isolation_cost if isolation_type == "HOSP_ISO" else (motel_room_cost + hourly_wage_nurse * nurse_checkin_hours if isolation_type == "MOTEL_ISO" else hourly_wage_nurse * nurse_checkin_hours)))
+
+  eq_direct:
+    label: "Direct cost of isolation"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_daily_cost * isolation_days
+
+  eq_productivity:
+    label: "Lost productivity"
+    unit: "USD"
+    output: "number"
+    compute: |
+      isolation_days * workday_ratio * hourly_wage_worker * 8
+
+  eq_discounted_2yr:
+    label: "Discounted 2-year progression probability"
+    unit: "dimensionless"
+    output: "number"
+    compute: |
+      (prob_latent_to_active_2yr / 2) / ((1 + discount_rate) ** 1) + (prob_latent_to_active_2yr / 2) / ((1 + discount_rate) ** 2)
+
+  eq_secondary_cost_per_latent:
+    label: "Cost per latent case (with discounting)"
+    unit: "USD"
+    output: "number"
+    compute: |
+      cost_latent + cost_active * (eq_discounted_2yr + sum((prob_latent_to_active_lifetime / remaining_years_of_life) / ((1 + discount_rate) ** y) for y in range(3, remaining_years_of_life + 1)))
+
+  eq_secondary:
+    label: "Cost of secondary infections"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_latent * eq_secondary_cost_per_latent
+
+  eq_total:
+    label: "Total cost"
+    unit: "USD"
+    output: "number"
+    compute: eq_direct + eq_productivity + eq_secondary
+
+scenarios:
+  - id: "14_day"
+    label: "14-day Isolation"
+    vars:
+      isolation_days: 14
+      latent_multiplier: 1.0
+  - id: "5_day"
+    label: "5-day Isolation"
+    vars:
+      isolation_days: 5
+      latent_multiplier: 1.5
+
+figures: []
+
+report:
+  - type: markdown
+    content: |
+      ## Overview
+      This calculator compares the economic impact of two tuberculosis isolation protocols:
+      14-day isolation (standard) versus 5-day isolation (shortened). The model accounts for
+      direct isolation costs, lost productivity, and the long-term costs of secondary TB
+      infections.
+
+      $$
+      \LaTeX \text{ test.}
+      $$
+
+      ## Scenarios
+      - **14-day Isolation**: Standard isolation protocol for infectious TB patients
+      - **5-day Isolation**: Shortened isolation protocol (increases secondary transmission risk)
+
+  - type: markdown
+    content: |
+      ## Key Model Components
+      1. **Secondary Infection Estimation**: Models latent and active TB cases resulting from
+          reduced isolation time
+      2. **Direct Costs**: Daily costs vary by isolation setting (hospital, motel, or home)
+      3. **Productivity Loss**: Lost wages during isolation period (index case only)
+      4. **Secondary Infection Costs**: Long-term costs of treating latent and active TB in
+          contacts, with appropriate discounting over remaining years of life
+      
+      ### Transmission Risk Impact
+      
+      Reducing isolation duration increases the infectious period, leading to more secondary cases:
+
+  - type: graph
+    kind: bar
+    title: "Health outcomes by isolation protocol"
+    caption: "Shorter isolation periods lead to more secondary TB infections, with cascading health and economic consequences."
+    rows:
+      - label: "Latent TB infections"
+        value: "eq_latent"
+      - label: "Active TB disease"
+        value: "eq_active"
+
+  - type: graph
+    kind: stacked_bar
+    title: "Cost breakdown by isolation protocol"
+    caption: "While shorter isolation reduces direct costs, secondary infection costs often dominate the total economic impact."
+    rows:
+      - label: "Direct cost of isolation"
+        value: "eq_direct"
+      - label: "Lost productivity for index case"
+        value: "eq_productivity"
+      - label: "Cost of secondary infections"
+        value: "eq_secondary"
+
+  - type: markdown
+    content: |
+      ## Economic Impact Summary
+      
+      The trade-off between isolation duration and transmission risk creates complex economic dynamics:
+      
+      - **Short-term savings**: Reduced isolation costs and productivity losses
+      - **Long-term costs**: Higher burden from secondary infections
+      - **Net effect**: Often favors longer isolation from a societal cost perspective
+
+  - type: graph
+    kind: bar
+    title: "Total cost comparison"
+    caption: "Overall economic impact typically favors longer isolation periods despite higher upfront costs."
+    rows:
+      - label: "Total cost"
+        value: "eq_total"
+
+  - type: markdown
+    content: |
+      ## Assumptions
+      - All costs are in USD
+      - Shortened isolation increases infectiousness by a multiplier
+      - Latent TB progression to active disease occurs in two phases: first 2 years and
+        remainder of lifetime
+      - Future costs are discounted at the specified discount rate
+      - Productivity loss assumes 8-hour workdays
+
+  - type: table
+    caption: "Detailed cost comparison by isolation protocol"
+    rows:
+      - label: "Latent TB infections"
+        value: "eq_latent"
+      - label: "Active TB disease"
+        value: "eq_active"
+      - label: "Direct cost of isolation"
+        value: "eq_direct"
+      - label: "Lost productivity for index case"
+        value: "eq_productivity"
+      - label: "Cost of secondary infections"
+        value: "eq_secondary"
+      - label: "Total cost"
+        value: "eq_total"
+        emphasis: "strong"
+

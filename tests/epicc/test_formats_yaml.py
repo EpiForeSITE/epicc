@@ -1,5 +1,3 @@
-"""Tests for epicc.formats.yaml (YAMLFormat)."""
-
 from io import BytesIO
 
 import pytest

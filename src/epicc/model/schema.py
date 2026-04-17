@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Author(BaseModel):
@@ -10,15 +10,8 @@ class Author(BaseModel):
     email: str | None = None
 
 
-class Metadata(BaseModel):
-    title: str
-    description: str
-    authors: list[Author] = Field(default_factory=list)
-    introduction: str | None = None
-
-
 class Parameter(BaseModel):
-    type: Literal["integer", "number", "string", "boolean"]
+    type: Literal["integer", "number", "string", "boolean", "enum"]
     label: str
     description: str | None = None
     default: int | float | str | bool
@@ -26,6 +19,31 @@ class Parameter(BaseModel):
     max: int | float | None = None
     unit: str | None = None
     references: list[str] = Field(default_factory=list)
+    options: dict[str, str] | None = Field(
+        None,
+        description="Ordered mapping of constant->display label for enum parameters. Required when type='enum'.",
+    )
+    
+    @model_validator(mode='after')
+    def validate_enum_options(self) -> 'Parameter':
+        """Ensure enum parameters have options and non-enum parameters don't."""
+        if self.type == 'enum':
+            if not self.options:
+                raise ValueError("Parameter with type='enum' must have 'options' defined")
+        else:
+            if self.options is not None:
+                raise ValueError(f"Parameter with type='{self.type}' cannot have 'options' (only enum parameters can)")
+        return self
+
+
+class ParameterGroup(BaseModel):
+    """A named visual group of parameters or nested sub-groups."""
+
+    label: str
+    children: list["str | ParameterGroup"] = Field(default_factory=list)
+
+
+ParameterGroup.model_rebuild()
 
 
 class Equation(BaseModel):
@@ -54,12 +72,46 @@ class TableRow(BaseModel):
     emphasis: Literal["strong", "em"] | None = None
 
 
-class Table(BaseModel):
-    scenarios: list[Scenario] = Field(default_factory=list)
+class MarkdownBlock(BaseModel):
+    type: Literal["markdown"]
+    content: str
+
+
+class TableBlock(BaseModel):
+    type: Literal["table"]
+    caption: str | None = None
+    columns: list[str] | None = Field(
+        None,
+        description="Scenario IDs to display as columns. Defaults to all scenarios in order.",
+    )
     rows: list[TableRow] = Field(default_factory=list)
 
 
+class FigureBlock(BaseModel):
+    type: Literal["figure"]
+    id: str = Field(..., description="References an entry in the top-level figures list.")
+
+
+class GraphBlock(BaseModel):
+    type: Literal["graph"]
+    kind: Literal["bar", "stacked_bar", "line", "pie"] = "bar"
+    title: str | None = None
+    caption: str | None = None
+    columns: list[str] | None = Field(
+        None,
+        description="Scenario IDs to include. Defaults to all scenarios in order.",
+    )
+    rows: list[TableRow] = Field(default_factory=list)
+
+
+ReportBlock = Annotated[
+    MarkdownBlock | TableBlock | FigureBlock | GraphBlock,
+    Field(discriminator="type"),
+]
+
+
 class Figure(BaseModel):
+    id: str
     title: str
     alt_text: str | None = Field(None, alias="alt-text")
     py_code: str | None = Field(None, alias="py-code")
@@ -68,11 +120,21 @@ class Figure(BaseModel):
 
 
 class Model(BaseModel):
-    metadata: Metadata
+    title: str
+    description: str
+    authors: list[Author] = Field(default_factory=list)
+
     parameters: dict[str, Parameter]
     equations: dict[str, Equation]
-    table: Table
+
+    groups: list[str | ParameterGroup] | None = None
+
+    scenarios: list[Scenario]
+    report: list[ReportBlock]
     figures: list[Figure] = Field(default_factory=list)
 
+    def resolved_scenarios(self) -> list[Scenario]:
+        return self.scenarios
 
-__all__ = ["Model"]
+
+__all__ = ["Model", "ParameterGroup", "TableRow", "TableBlock", "MarkdownBlock", "FigureBlock", "GraphBlock", "ReportBlock"]

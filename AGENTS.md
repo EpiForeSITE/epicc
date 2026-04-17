@@ -1,7 +1,7 @@
-# AGENTS.md — epicc Cost Calculator
+# AGENTS.md - epicc Cost Calculator
 
 This file describes the conventions, roles, and constraints for contributors working in this
-repository. All agents — whether running in GitHub Actions or invoked interactively — should
+repository. All agents - whether running in GitHub Actions or invoked interactively - should
 read and follow this document before making changes.
 
 ---
@@ -11,25 +11,20 @@ read and follow this document before making changes.
 **epicc** is a browser-based epidemiological cost calculator built with **Streamlit** and
 distributed as a static **stlite** build for browser execution.
 
-The current app supports two model flows:
+The current app supports YAML-driven model flows:
 
-1. **Python + YAML models**
-   - A Python module in `models/` implements model logic.
-   - A paired YAML file provides default parameters.
-   - `app.py` loads the Python module, loads YAML defaults, renders parameter inputs,
-     runs the model, and renders sections.
-
-2. **Excel-driven models**
-   - An uploaded `.xlsx` file is parsed by `utils/excel_model_runner.py`.
-   - Parameters and computed outputs are rendered from workbook contents.
+- A YAML file in `src/epicc/model/models/` defines model metadata, parameters, equations, scenarios, and report structure.
+- The `ModelFactory` compiles YAML models into Python `BaseSimulationModel` subclasses at runtime.
+- `src/epicc/__main__.py` loads models via `MODEL_REGISTRY`, renders parameter inputs via `src/epicc/ui/`, 
+  runs compiled models, and renders results via `src/epicc/ui/report.py`.
 
 Current high-level flow:
 
-`discover_models() → load_model_from_file() / load_model_params() → render_parameters_with_indent() → run_model() → build_sections() → render_sections()`
+`MODEL_REGISTRY.discover() -> load_model() -> ModelFactory.create_model_class() -> render_sidebar_parameters() -> model.run() -> render_sections()`
 
 Persistence helpers:
-- `store_model_state()`
-- `save_current_model()`
+- `sync_active_model()`
+- Parameter export via `src/epicc/ui/export.py`
 
 ---
 
@@ -96,7 +91,7 @@ Top-level files and directories you will use most often:
 - `src/epicc/formats/`:
    - Parameter format readers/writers (`yaml.py`, `xlsx.py`, templates).
 - `src/epicc/utils/`:
-   - App support modules (`model_loader.py`, `parameter_loader.py`, `parameter_ui.py`, `section_renderer.py`, `excel_model_runner.py`).
+   - App support modules (`model_loader.py`, `parameter_loader.py`, `parameter_ui.py`, `section_renderer.py`).
 - `models/`:
    - Built-in model implementations and matching parameter defaults.
 - `config/`:
@@ -162,17 +157,10 @@ When adding or editing Python+YAML models:
    - `models/<name>.py` with `models/<name>.yaml`.
 - Ensure YAML default keys map to parameters expected by model code.
 - Preserve scenario label behavior:
-   - Python models can provide scenario labels,
-   - Excel flow supports header overrides from uploaded workbook columns.
+   - Python models can provide scenario labels for output headers.
 - If changing parameter structures, validate both:
    - default-loading behavior,
    - reset-to-default behavior in sidebar controls.
-
-When editing Excel-driven behavior:
-
-- Maintain support for uploaded `.xlsx` files in the sidebar.
-- Keep computed outputs and editable defaults behavior intact.
-- Avoid breaking scenario-header override support.
 
 ---
 
@@ -202,7 +190,7 @@ When editing Excel-driven behavior:
 Before editing:
 
 1. Read the relevant modules and tests for the target behavior.
-2. Identify whether the change affects Python-model flow, Excel flow, or both.
+2. Identify whether the change affects model flow, parameter loading, or UI rendering.
 3. Confirm config and schema assumptions.
 
 During editing:
@@ -234,7 +222,7 @@ Before handoff:
 A change is complete when:
 
 1. Requested behavior is implemented.
-2. Existing model flows still run (Python+YAML and Excel-driven, if affected).
+2. Existing Python+YAML model flows still run.
 3. Relevant tests pass locally.
 4. Documentation/config/workflow updates needed for the change are included.
 

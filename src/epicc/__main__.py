@@ -1,495 +1,168 @@
-import hashlib
-import importlib.resources
-import re
-from typing import Any
+from typing import cast
 
 import streamlit as st
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
-from epicc.config import CONFIG
-from epicc.formats import VALID_PARAMETER_SUFFIXES
 from epicc.model.base import BaseSimulationModel
-from epicc.utils.excel_model_runner import (
-    get_scenario_headers,
-    load_excel_params_defaults_with_computed,
-    run_excel_driven_model,
+from epicc.model.models import get_all_models
+from epicc.ui.export import (
+    render_parameter_export_modal,
+    render_pdf_export_button,
+    trigger_print_if_requested,
 )
-from epicc.utils.model_loader import get_built_in_models
-from epicc.utils.parameter_loader import load_model_params
-from epicc.utils.parameter_ui import (
-    item_level,
-    render_parameters_with_indent,
+from epicc.ui.parameters import (
+    build_typed_params,
+    render_sidebar_parameters,
+    render_validation_error,
     reset_parameters_to_defaults,
 )
-from epicc.utils.section_renderer import render_sections
+from epicc.ui.report import get_report_renderer
+from epicc.ui.state import (
+    has_results,
+    get_run_output,
+    initialize_state,
+    set_run_output,
+    sync_active_model,
+)
+from epicc.ui.styles import load_styles
 
-# ---------------------------------------------------------------------------
-# Export / print state helpers (inlined from epicc.utils.export)
-# ---------------------------------------------------------------------------
+st.set_page_config(page_title="EPICC Cost Calculator", layout="wide")
+load_styles()
+initialize_state()
 
-RESULTS_PAYLOAD_KEY = "results_payload"
-PRINT_REQUESTED_KEY = "print_requested"
-PRINT_TRIGGER_TOKEN_KEY = "print_trigger_token"
+all_models = get_all_models()
+model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 
+hdr_title, hdr_model = st.columns([3, 3])
+hdr_title.title("EPICC Cost Calculator")
+selected_label: str | None = hdr_model.selectbox(
+    "Model",
+    list(model_registry),
+    index=None,
+    placeholder="Select a model...",
+    label_visibility="collapsed",
+)
 
-def initialize_export_state() -> None:
-    if RESULTS_PAYLOAD_KEY not in st.session_state:
-        st.session_state[RESULTS_PAYLOAD_KEY] = None
+st.divider()
 
-    if PRINT_REQUESTED_KEY not in st.session_state:
-        st.session_state[PRINT_REQUESTED_KEY] = False
+if selected_label is None:
+    st.markdown(
+        """
+## Welcome to EPICC
 
-    if PRINT_TRIGGER_TOKEN_KEY not in st.session_state:
-        st.session_state[PRINT_TRIGGER_TOKEN_KEY] = 0
+**EPICC** (or *EP*idemiological *C*ost *C*alculator) is a tool for quickly running arbitrary
+epidemiological models directly inside your browser. Select a disease model, adjust
+the parameters to match your setting, and run the simulation to explore the cost
+implications of different policy scenarios.
 
+### What you can do
 
-def clear_export_state() -> None:
-    st.session_state[RESULTS_PAYLOAD_KEY] = None
-    st.session_state[PRINT_REQUESTED_KEY] = False
-    st.session_state[PRINT_TRIGGER_TOKEN_KEY] = 0
+ - **Compare scenarios:** Each model defines multiple intervention points so you can
+   quantify the cost implications of different policy choices within the same run.
 
+ - **Understand the assumptions:** Every model documents the equations and default
+   values it uses. Read the parameter descriptions before you run, and treat outputs
+   with the caveats in mind.
 
-def has_results() -> bool:
-    return st.session_state.get(RESULTS_PAYLOAD_KEY) is not None
+ - **Save and share your work:** Export your current parameters and send them to a
+   colleague, so they can pick up exactly where you left off, or reload them yourself
+   any time you want to revisit the analysis.
 
+ - **Generate a report:** Once you've run a simulation, save the results page as a PDF
+   to share directly with stakeholders.
 
-def get_results_payload() -> dict[str, Any] | None:
-    payload = st.session_state.get(RESULTS_PAYLOAD_KEY)
-    if payload is None:
-        return None
+### A note on interpretation
 
-    return payload
+This tool is designed as a decision-support aid, not a definitive forecast. Results
+depend on the assumptions baked into each model and the parameter values you supply.
+Always review the model assumptions before sharing outputs externally.
 
+### Get started
 
-def set_results_payload(payload: dict[str, Any] | None) -> None:
-    st.session_state[RESULTS_PAYLOAD_KEY] = payload
+Choose a model from the combobox above to get started. Edit its parameters on the
+left, run the simulation, and see the results on the right. Happy exploring!
 
-
-def render_export_button() -> None:
-    export_clicked = st.sidebar.button(
-        "Export Results as PDF", disabled=not has_results()
+"""
     )
 
-    if export_clicked and has_results():
-        st.session_state[PRINT_REQUESTED_KEY] = True
-        st.session_state[PRINT_TRIGGER_TOKEN_KEY] = (
-            st.session_state.get(PRINT_TRIGGER_TOKEN_KEY, 0) + 1
-        )
+    st.stop()
 
+active_model = model_registry[selected_label]
+assert selected_label is not None  # Type narrowing for mypy
+params = sync_active_model(selected_label)
 
-def trigger_print_if_requested() -> None:
-    if not st.session_state.get(PRINT_REQUESTED_KEY):
-        return
+param_col, result_col = st.columns([2, 3], gap="large")
 
-    if not has_results():
-        st.session_state[PRINT_REQUESTED_KEY] = False
-        return
-
-    trigger_token = st.session_state.get(PRINT_TRIGGER_TOKEN_KEY, 0)
-    st.html(
-        (
-            "<script>"
-            f"window.__epiccPrintToken = {trigger_token};"
-            "setTimeout(function(){ window.parent.print(); }, 0);"
-            "</script>"
-        ),
-        unsafe_allow_javascript=True,
-    )
-    st.session_state[PRINT_REQUESTED_KEY] = False
-
-
-def _load_styles() -> None:
-    with importlib.resources.files("epicc").joinpath("web/sidebar.css").open("rb") as f:
-        css_content = f.read().decode("utf-8")
-        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
-
-
-def _sync_active_model(model_key: str) -> dict[str, Any]:
-    active_model_key = st.session_state.get("active_model_key")
-    if active_model_key != model_key:
-        st.session_state.active_model_key = model_key
-        st.session_state.params = {}
-        clear_export_state()
-
-    if "params" not in st.session_state:
-        st.session_state.params = {}
-
-    return st.session_state.params
-
-
-def _render_results_panel(results_payload: dict[str, Any]) -> None:
-    st.title(results_payload.get("title", CONFIG.app.title))
-    st.write(results_payload.get("description", ""))
-    render_sections(results_payload.get("sections", []))
-
-
-def _render_excel_parameter_inputs(
-    params: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, str]]:
-    label_overrides: dict[str, str] = {}
-
-    uploaded_excel_model = st.sidebar.file_uploader(
-        "Upload Excel model file (.xlsx)", type=["xlsx"], key="excel_model_uploader"
-    )
-    if not uploaded_excel_model:
-        st.sidebar.info("Upload an Excel model file to edit parameters.")
-        return params, label_overrides
-
-    upload_bytes = uploaded_excel_model.getvalue()
-    upload_hash = hashlib.sha1(upload_bytes).hexdigest()
-    excel_identity = (uploaded_excel_model.name, len(upload_bytes), upload_hash)
-    should_refresh_params = False
-    if st.session_state.get("excel_active_identity") != excel_identity:
-        st.session_state.excel_active_identity = excel_identity
-        st.session_state.params = {}
-        clear_export_state()
-        params = st.session_state.params
-        should_refresh_params = True
-
-    uploaded_excel_name = uploaded_excel_model.name
-
-    editable_defaults, _ = load_excel_params_defaults_with_computed(
-        uploaded_excel_model, sheet_name=None, start_row=3
-    )
-    current_headers = get_scenario_headers(uploaded_excel_model)
-
-    def handle_reset_excel() -> None:
-        reset_parameters_to_defaults(editable_defaults, params, uploaded_excel_name)
-        for col_letter, default_text in current_headers.items():
-            st.session_state[f"label_override_{col_letter}"] = default_text
-
-    if should_refresh_params:
-        handle_reset_excel()
-
-    st.sidebar.button("Reset Parameters", on_click=handle_reset_excel)
-
-    if current_headers:
-        with st.sidebar.expander("Output Scenario Headers", expanded=False):
-            st.caption("Rename the output headers (B, C, D, E)")
-            for col_letter in sorted(current_headers.keys()):
-                default_text = current_headers[col_letter]
-                widget_key = f"label_override_{col_letter}"
-                if widget_key in st.session_state:
-                    label_overrides[col_letter] = st.text_input(
-                        f"Column {col_letter} Label", key=widget_key
-                    )
-                    continue
-
-                label_overrides[col_letter] = st.text_input(
-                    f"Column {col_letter} Label",
-                    value=default_text,
-                    key=widget_key,
-                )
-
-    render_parameters_with_indent(
-        editable_defaults, params, model_id=uploaded_excel_name
-    )
-    return params, label_overrides
-
-
-def _render_python_parameter_inputs(
-    model: BaseSimulationModel,
-    model_key: str,
-    params: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, str], dict[str, Any], bool]:
-    label_overrides: dict[str, str] = {}
-
-    sorted_suffixes = sorted(VALID_PARAMETER_SUFFIXES)
-    uploaded_params = st.sidebar.file_uploader(
-        "Optional parameter file",
-        type=sorted_suffixes,
-        help="If omitted, model defaults are used.",
-        accept_multiple_files=False,
+with param_col:
+    params, label_overrides, model_defaults_flat, has_input_errors = render_sidebar_parameters(
+        active_model, selected_label, params, container=param_col
     )
 
-    if uploaded_params:
-        cheap_id = (uploaded_params.name, uploaded_params.size)
-        cached = st.session_state.get("_upload_hash_cache")
-        if cached is not None and cached[0] == cheap_id:
-            upload_hash = cached[1]
-        else:
-            upload_hash = hashlib.sha1(uploaded_params.getvalue()).hexdigest()
-            st.session_state["_upload_hash_cache"] = (cheap_id, upload_hash)
-        param_identity = (
-            "upload",
-            uploaded_params.name,
-            uploaded_params.size,
-            upload_hash,
-        )
-    else:
-        param_identity = ("default", None, 0, None)
-    should_refresh_params = False
-    if st.session_state.get("active_param_identity") != param_identity:
-        st.session_state.active_param_identity = param_identity
-        st.session_state.params = {}
-        clear_export_state()
-        params = st.session_state.params
-        should_refresh_params = True
-
-    try:
-        model_defaults = load_model_params(
-            model,
-            uploaded_params=uploaded_params or None,
-            uploaded_name=uploaded_params.name if uploaded_params else None,
-        )
-    except ValidationError as exc:
-        _render_validation_error_details(model.human_name(), exc, sidebar=True)
-        return params, label_overrides, {}, True
-    except ValueError as exc:
-        st.sidebar.error(
-            f"Could not read parameter file for {model.human_name()}: {exc}"
-        )
-        return params, label_overrides, {}, True
-
-    if not model_defaults:
-        st.sidebar.info("No default parameters defined for this model.")
-        return params, label_overrides, {}, True
-
-    current_headers = model.scenario_labels
-
-    def handle_reset_python() -> None:
-        reset_parameters_to_defaults(model_defaults, params, model_key)
-        if not current_headers:
-            return
-
-        for key, default_text in current_headers.items():
-            st.session_state[f"py_label_{model_key}_{key}"] = default_text
-
-    if should_refresh_params:
-        handle_reset_python()
-
-    st.sidebar.button("Reset Parameters", on_click=handle_reset_python)
-
-    if current_headers:
-        with st.sidebar.expander("Output Scenario Headers", expanded=False):
-            st.caption("Rename the output headers")
-            for key, default_text in current_headers.items():
-                widget_key = f"py_label_{model_key}_{key}"
-                default_label = str(default_text)
-                if widget_key in st.session_state:
-                    label_overrides[key] = st.text_input(
-                        f"Label for '{default_label}'", key=widget_key
-                    )
-                    continue
-
-                label_overrides[key] = st.text_input(
-                    f"Label for '{default_label}'",
-                    value=default_label,
-                    key=widget_key,
-                )
-
-    render_parameters_with_indent(model_defaults, params, model_id=model_key)
-    return params, label_overrides, model_defaults, False
-
-
-def _unflatten_indented_params(flat_params: dict[str, Any]) -> dict[str, Any]:
-    root: dict[str, Any] = {}
-    stack: list[dict[str, Any]] = [root]
-
-    for raw_key, value in flat_params.items():
-        level = item_level(raw_key)
-        label = raw_key.strip()
-
-        while len(stack) > level + 1:
-            stack.pop()
-
-        parent = stack[-1]
-        if value is None:
-            node: dict[str, Any] = {}
-            parent[label] = node
-            stack.append(node)
-            continue
-
-        parent[label] = value
-
-    return root
-
-
-def _merge_sidebar_values(
-    nested_defaults: dict[str, Any], params: dict[str, Any]
-) -> dict[str, Any]:
-    merged: dict[str, Any] = {}
-    for key, value in nested_defaults.items():
-        if isinstance(value, dict):
-            merged[key] = _merge_sidebar_values(value, params)
-            continue
-
-        merged[key] = params.get(key, value)
-
-    return merged
-
-
-def _build_typed_params(
-    model: BaseSimulationModel,
-    model_defaults_flat: dict[str, Any],
-    params: dict[str, Any],
-) -> BaseModel:
-    nested_defaults = _unflatten_indented_params(model_defaults_flat)
-    payload = _merge_sidebar_values(nested_defaults, params)
-    return model.parameter_model().model_validate(payload)
-
-
-def _render_validation_error_details(
-    model_name: str, exc: ValidationError, sidebar: bool
-) -> None:
-    target = st.sidebar if sidebar else st
-    issues = exc.errors()
-    issue_count = len(issues)
-    target.error(f"Parameters do not match {model_name} schema ({issue_count} issues).")
-
-    details = target.expander("Validation details", expanded=False)
-    with details:
-        preview_count = 8
-        for issue in issues[:preview_count]:
-            loc_parts = issue.get("loc", [])
-            path = " > ".join(str(p) for p in loc_parts) if loc_parts else "(root)"
-            msg = issue.get("msg", "Invalid value")
-            st.write(f"- {path}: {msg}")
-
-        if issue_count > preview_count:
-            st.caption(f"...and {issue_count - preview_count} more.")
-
-        safe_model_name = re.sub(r"[^a-z0-9]+", "_", model_name.lower()).strip("_")
-        full_details = exc.json(indent=2)
-        detail_digest = hashlib.sha1(full_details.encode("utf-8")).hexdigest()[:10]
-        st.text_area(
-            "Full details (copyable)",
-            value=full_details,
-            height=180,
-            key=f"{safe_model_name}_{'sidebar' if sidebar else 'main'}_validation_text_{detail_digest}",
-        )
-        st.download_button(
-            "Download full error details",
-            data=full_details,
-            file_name=f"{safe_model_name}_validation_error.json",
-            mime="application/json",
-            key=f"{safe_model_name}_{'sidebar' if sidebar else 'main'}_validation_download_{detail_digest}",
-        )
-
-
-def _run_excel_simulation(
-    params: dict[str, Any], label_overrides: dict[str, str]
-) -> dict[str, Any] | None:
-    uploaded_excel_model = st.session_state.get("excel_model_uploader")
-    if not uploaded_excel_model:
-        st.error("Please upload an Excel model file first.")
-        return None
-
-    with st.spinner(f"Running Excel-driven model: {uploaded_excel_model.name}..."):
-        results = run_excel_driven_model(
-            excel_file=uploaded_excel_model,
-            filename=uploaded_excel_model.name,
-            params=params,
-            sheet_name=None,
-            label_overrides=label_overrides,
-        )
-        return {
-            "title": results.get("model_title", "Excel Driven Model"),
-            "description": results.get("model_description", ""),
-            "sections": results.get("sections", []),
-        }
-
-
-def _run_python_simulation(
-    selected_label: str,
-    model: BaseSimulationModel,
-    typed_params: BaseModel,
-    label_overrides: dict[str, str],
-) -> dict[str, Any]:
-    # NOTE: Previously this function rendered results directly with st.* calls and
-    # returned None implicitly. That meant set_results_payload(None) was always
-    # called, has_results() was always False, and the PDF export button was
-    # permanently disabled. It now returns a payload dict stored in session state;
-    # rendering is deferred to _render_results_panel after st.rerun().
-    with st.spinner(f"Running {selected_label}..."):
-        results = model.run(typed_params, label_overrides=label_overrides)
-        sections = model.build_sections(results)
-    return {
-        "title": model.model_title or CONFIG.app.title,
-        "description": model.model_description or CONFIG.app.description,
-        "sections": sections,
-    }
-
-
-_load_styles()
-
-st.sidebar.title("epicc Cost Calculator")
-st.sidebar.header("Simulation Controls")
-
-built_in_models = get_built_in_models()
-model_registry: dict[str, BaseSimulationModel] = {
-    m.human_name(): m for m in built_in_models
-}
-model_labels = [*model_registry.keys(), "Excel Driven Model"]
-
-selected_label = st.sidebar.selectbox("Select Model", model_labels, index=0)
-is_excel_model = selected_label == "Excel Driven Model"
-model_key = selected_label
-
-params = _sync_active_model(model_key)
-initialize_export_state()
-
-st.sidebar.subheader("Input Parameters")
-
-has_input_errors = False
-typed_params: BaseModel | None = None
-
-if is_excel_model:
-    params, label_overrides = _render_excel_parameter_inputs(params)
-    model_defaults_flat: dict[str, Any] = {}
-else:
-    params, label_overrides, model_defaults_flat, has_input_errors = (
-        _render_python_parameter_inputs(
-            model_registry[selected_label],
-            model_key,
-            params,
-        )
-    )
-
+    typed_params = None
     if not has_input_errors:
         try:
-            typed_params = _build_typed_params(
-                model_registry[selected_label], model_defaults_flat, params
-            )
+            typed_params = build_typed_params(active_model, model_defaults_flat, params)
         except ValidationError as exc:
-            _render_validation_error_details(selected_label, exc, sidebar=True)
+            render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-run_clicked = st.sidebar.button("Run Simulation", disabled=has_input_errors)
-render_export_button()
-
-# For Excel models typed_params is never set (not needed by that path).
-# Only block execution for Python models when parameter validation has failed.
-if not is_excel_model and typed_params is None:
-    st.error("Cannot run simulation until parameter validation errors are fixed.")
-    st.stop()
-
-if run_clicked:
-    if is_excel_model:
-        set_results_payload(_run_excel_simulation(params, label_overrides))
-    else:
-        assert typed_params is not None  # guaranteed by the st.stop() guard above
-        set_results_payload(
-            _run_python_simulation(
-                selected_label,
-                model_registry[selected_label],
-                typed_params,
-                label_overrides,
-            )
+    # Reset and Save Parameters buttons side by side 
+    button_col1, button_col2 = st.columns(2)
+    
+    # Reset Parameters button
+    def _handle_reset() -> None:
+        model_label = cast(str, selected_label)  # Safe because we checked above
+        reset_parameters_to_defaults(
+            model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
         )
+        # Reset scenario labels if they exist
+        current_headers = active_model.scenario_labels
+        if current_headers:
+            for key, default_text in current_headers.items():
+                st.session_state[f"py_label_{model_label}_{key}"] = default_text
+    
+    with button_col1:
+        st.button("Reset Parameters", on_click=_handle_reset, width='stretch')
+    
+    # Save Parameters button (only enabled when parameters are valid)
+    with button_col2:
+        if typed_params is not None:
+            render_parameter_export_modal(
+                active_model.human_name(),
+                typed_params.model_dump(),
+                pydantic_model=type(typed_params),
+                container=button_col2,
+            )
+        else:
+            st.button("Save Parameters", disabled=True, width='stretch', help="Fix parameter errors first")
 
-    # Always rerun after a successful run so the export button reflects the new
-    # state (has_results() == True) and _render_results_panel is reached below.
-    if has_results():
+    st.divider()
+    run_clicked = st.button(
+        "Run Simulation", disabled=has_input_errors, width='stretch', type='primary'
+    )
+
+with result_col:
+    trigger_print_if_requested()
+
+    if typed_params is None:
+        st.warning("Fix parameter errors to enable simulation.")
+        st.stop()
+
+    if run_clicked:
+        with st.spinner(f"Running {selected_label}..."):
+            run_output = active_model.run(typed_params, label_overrides=label_overrides)
+        set_run_output(run_output)
         st.rerun()
 
-elif not has_results():
-    # No run was clicked and no stored results exist yet; nothing to display.
-    st.stop()
+    renderer = get_report_renderer(active_model)
+    _HINT = "This report has not been filled, since your simulation has not been run. Run the simulation to see the results here."
 
+    with st.container(key='results-report'):
+        if has_results():
+            renderer.render(get_run_output())
+        else:
+            renderer.render(None, hint=_HINT)
 
-results_payload = get_results_payload()
-if results_payload:
-    _render_results_panel(results_payload)
+    st.divider()
+    render_pdf_export_button(container=result_col)
 
-trigger_print_if_requested()
