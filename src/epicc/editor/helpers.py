@@ -155,8 +155,8 @@ def yaml_to_state(raw: bytes) -> EditorState:
             "label": p.get("label", ""),
             "description": p.get("description", ""),
             "default": p.get("default", 0),
-            "min": p.get("min", 0) if p.get("min") is not None else 0,
-            "max": p.get("max", 100) if p.get("max") is not None else 100,
+            "min": p.get("min") if p.get("min") is not None else 0,
+            "max": p.get("max") if p.get("max") is not None else 100,
             "unit": p.get("unit", ""),
             "references": "\n".join(p.get("references", [])),
             "options": "\n".join(
