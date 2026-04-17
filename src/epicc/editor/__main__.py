@@ -34,6 +34,44 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
+# Widget-key versioning
+# ---------------------------------------------------------------------------
+# Streamlit caches widget values by key.  When the list of authors (or
+# parameters, etc.) changes structurally (upload, add, remove), cached
+# values under old keys can shadow the correct data.  We embed a version
+# counter in every dynamic widget key so that a version bump forces
+# Streamlit to create genuinely new widgets that honour the ``value``
+# parameter from the current list state.
+
+
+def _bump_version() -> None:
+    """Increment the widget-key version counter."""
+    st.session_state["_wv"] = st.session_state.get("_wv", 0) + 1
+
+
+def _v() -> int:
+    """Return the current widget-key version."""
+    return int(st.session_state.get("_wv", 0))
+
+
+# ---------------------------------------------------------------------------
+# Callbacks – executed *before* the next script rerun
+# ---------------------------------------------------------------------------
+
+
+def _add_item(section: str, template: dict[str, Any]) -> None:
+    st.session_state[section].append(copy.deepcopy(template))
+    _bump_version()
+
+
+def _remove_item(section: str, idx: int) -> None:
+    items: list[Any] = st.session_state[section]
+    if 0 <= idx < len(items):
+        items.pop(idx)
+    _bump_version()
+
+
+# ---------------------------------------------------------------------------
 # Session-state initialization
 # ---------------------------------------------------------------------------
 
@@ -41,7 +79,7 @@ st.markdown(
 def _init_state() -> None:
     for key, default in DEFAULT_STATE.items():
         if key not in st.session_state:
-            if isinstance(default, list):
+            if isinstance(default, (list, dict)):
                 st.session_state[key] = copy.deepcopy(default)
             else:
                 st.session_state[key] = default
@@ -57,10 +95,30 @@ with st.sidebar:
     st.header("Load / Save")
     uploaded = st.file_uploader("Upload a model YAML file", type=["yaml", "yml"])
     if uploaded is not None:
-        state = yaml_to_state(uploaded.getvalue())
-        for k, v in state.items():
-            st.session_state[k] = v
+        file_id = f"{uploaded.name}:{uploaded.size}"
+        if st.session_state.get("_uploaded_file_id") != file_id:
+            st.session_state["_uploaded_file_id"] = file_id
+            state = yaml_to_state(uploaded.getvalue())
+            _bump_version()
+            for k, v in state.items():
+                st.session_state[k] = v
+            st.rerun()
         st.success(f"Loaded **{uploaded.name}**")
+
+# ---------------------------------------------------------------------------
+# Sync helper – read widget values back into the canonical list
+# ---------------------------------------------------------------------------
+
+
+def _sync_list(
+    section: str,
+    widgets: list[dict[str, Any]],
+) -> None:
+    """Replace *section* in session state with *widgets* (values read from UI)."""
+    st.session_state[section] = widgets if widgets else copy.deepcopy(
+        DEFAULT_STATE.get(section, [])
+    )
+
 
 # ---------------------------------------------------------------------------
 # Form sections
@@ -73,24 +131,36 @@ meta_tab, params_tab, eqs_tab, scenarios_tab, report_tab, figures_tab = st.tabs(
 # ---- Metadata ----
 with meta_tab:
     st.subheader("Model Metadata")
-    st.session_state["model_title"] = st.text_input("Title *", st.session_state["model_title"])
+    st.session_state["model_title"] = st.text_input(
+        "Title *", st.session_state["model_title"]
+    )
     st.session_state["model_description"] = st.text_area(
         "Description *", st.session_state["model_description"], height=100
     )
 
     st.markdown("**Authors**")
-    authors: list[dict[str, str]] = st.session_state["authors"]
-    updated_authors: list[dict[str, str]] = []
-    for i, author in enumerate(authors):
-        cols = st.columns([3, 3, 1])
-        name = cols[0].text_input("Name", author["name"], key=f"author_name_{i}")
-        email = cols[1].text_input("Email", author["email"], key=f"author_email_{i}")
-        remove = cols[2].button("✕", key=f"rm_author_{i}")
-        if not remove:
-            updated_authors.append({"name": name, "email": email})
-    if st.button("＋ Add author"):
-        updated_authors.append({"name": "", "email": ""})
-    st.session_state["authors"] = updated_authors or [{"name": "", "email": ""}]
+    _authors: list[dict[str, str]] = st.session_state["authors"]
+    _updated_authors: list[dict[str, str]] = []
+    for _i, _author in enumerate(_authors):
+        _cols = st.columns([3, 3, 1])
+        _name = _cols[0].text_input(
+            "Name", _author["name"], key=f"author_name_{_v()}_{_i}"
+        )
+        _email = _cols[1].text_input(
+            "Email", _author["email"], key=f"author_email_{_v()}_{_i}"
+        )
+        _cols[2].button(
+            "✕", key=f"rm_author_{_v()}_{_i}",
+            on_click=_remove_item, args=("authors", _i),
+        )
+        _updated_authors.append({"name": _name, "email": _email})
+
+    st.button(
+        "＋ Add author",
+        on_click=_add_item,
+        args=("authors", {"name": "", "email": ""}),
+    )
+    _sync_list("authors", _updated_authors)
 
 # ---- Parameters ----
 with params_tab:
@@ -100,68 +170,79 @@ with params_tab:
         "a **type**, and a **default** value. For enum parameters, specify options as "
         "``KEY: Label`` lines."
     )
-    params: list[dict[str, Any]] = st.session_state["parameters"]
-    updated_params: list[dict[str, Any]] = []
-    for i, p in enumerate(params):
+    _params: list[dict[str, Any]] = st.session_state["parameters"]
+    _updated_params: list[dict[str, Any]] = []
+    for _i, _p in enumerate(_params):
         with st.expander(
-            p.get("label") or p.get("id") or f"Parameter {i + 1}",
-            expanded=(i == len(params) - 1 and not p.get("id")),
+            _p.get("label") or _p.get("id") or f"Parameter {_i + 1}",
+            expanded=(_i == len(_params) - 1 and not _p.get("id")),
         ):
-            c1, c2 = st.columns(2)
-            pid = c1.text_input("ID *", p.get("id", ""), key=f"pid_{i}")
-            ptype = c2.selectbox(
+            _c1, _c2 = st.columns(2)
+            _pid = _c1.text_input("ID *", _p.get("id", ""), key=f"pid_{_v()}_{_i}")
+            _ptype = _c2.selectbox(
                 "Type *",
                 ["integer", "number", "string", "boolean", "enum"],
                 index=["integer", "number", "string", "boolean", "enum"].index(
-                    p.get("type", "number")
+                    _p.get("type", "number")
                 ),
-                key=f"ptype_{i}",
+                key=f"ptype_{_v()}_{_i}",
             )
-            plabel = st.text_input("Label *", p.get("label", ""), key=f"plabel_{i}")
-            pdesc = st.text_input("Description", p.get("description", ""), key=f"pdesc_{i}")
+            _plabel = st.text_input("Label *", _p.get("label", ""), key=f"plabel_{_v()}_{_i}")
+            _pdesc = st.text_input(
+                "Description", _p.get("description", ""), key=f"pdesc_{_v()}_{_i}"
+            )
 
-            dc1, dc2, dc3 = st.columns(3)
-            pdefault_raw = dc1.text_input(
-                "Default *", str(p.get("default", "")), key=f"pdef_{i}"
+            _dc1, _dc2, _dc3 = st.columns(3)
+            _pdefault_raw = _dc1.text_input(
+                "Default *", str(_p.get("default", "")), key=f"pdef_{_v()}_{_i}"
             )
-            pmin_raw = dc2.text_input("Min", str(p.get("min", "")), key=f"pmin_{i}")
-            pmax_raw = dc3.text_input("Max", str(p.get("max", "")), key=f"pmax_{i}")
-            punit = st.text_input("Unit", p.get("unit", ""), key=f"punit_{i}")
-            prefs = st.text_area(
+            _pmin_raw = _dc2.text_input(
+                "Min", str(_p.get("min", "")), key=f"pmin_{_v()}_{_i}"
+            )
+            _pmax_raw = _dc3.text_input(
+                "Max", str(_p.get("max", "")), key=f"pmax_{_v()}_{_i}"
+            )
+            _punit = st.text_input("Unit", _p.get("unit", ""), key=f"punit_{_v()}_{_i}")
+            _prefs = st.text_area(
                 "References (one per line)",
-                p.get("references", ""),
-                key=f"prefs_{i}",
+                _p.get("references", ""),
+                key=f"prefs_{_v()}_{_i}",
                 height=68,
             )
 
-            poptions = ""
-            if ptype == "enum":
-                poptions = st.text_area(
+            _poptions = ""
+            if _ptype == "enum":
+                _poptions = st.text_area(
                     "Options (KEY: Label, one per line)",
-                    p.get("options", ""),
-                    key=f"popts_{i}",
+                    _p.get("options", ""),
+                    key=f"popts_{_v()}_{_i}",
                     height=68,
                 )
 
-            remove = st.button("Remove parameter", key=f"rm_param_{i}")
-            if not remove:
-                updated_params.append(
-                    {
-                        "id": pid,
-                        "type": ptype,
-                        "label": plabel,
-                        "description": pdesc,
-                        "default": pdefault_raw,
-                        "min": pmin_raw,
-                        "max": pmax_raw,
-                        "unit": punit,
-                        "references": prefs,
-                        "options": poptions,
-                    }
-                )
+            st.button(
+                "Remove parameter", key=f"rm_param_{_v()}_{_i}",
+                on_click=_remove_item, args=("parameters", _i),
+            )
+            _updated_params.append(
+                {
+                    "id": _pid,
+                    "type": _ptype,
+                    "label": _plabel,
+                    "description": _pdesc,
+                    "default": _pdefault_raw,
+                    "min": _pmin_raw,
+                    "max": _pmax_raw,
+                    "unit": _punit,
+                    "references": _prefs,
+                    "options": _poptions,
+                }
+            )
 
-    if st.button("＋ Add parameter"):
-        updated_params.append(
+    st.button(
+        "＋ Add parameter",
+        on_click=_add_item,
+        args=(
+            "parameters",
             {
                 "id": "",
                 "type": "number",
@@ -173,9 +254,10 @@ with params_tab:
                 "unit": "",
                 "references": "",
                 "options": "",
-            }
-        )
-    st.session_state["parameters"] = updated_params
+            },
+        ),
+    )
+    _sync_list("parameters", _updated_params)
 
 # ---- Equations ----
 with eqs_tab:
@@ -184,48 +266,58 @@ with eqs_tab:
         "Each equation has a unique **ID**, a **label**, and a **compute** expression "
         "that may reference parameter IDs, scenario variable names, or other equation IDs."
     )
-    eqs: list[dict[str, Any]] = st.session_state["equations"]
-    updated_eqs: list[dict[str, Any]] = []
-    for i, eq in enumerate(eqs):
+    _eqs: list[dict[str, Any]] = st.session_state["equations"]
+    _updated_eqs: list[dict[str, Any]] = []
+    for _i, _eq in enumerate(_eqs):
         with st.expander(
-            eq.get("label") or eq.get("id") or f"Equation {i + 1}",
-            expanded=(i == len(eqs) - 1 and not eq.get("id")),
+            _eq.get("label") or _eq.get("id") or f"Equation {_i + 1}",
+            expanded=(_i == len(_eqs) - 1 and not _eq.get("id")),
         ):
-            c1, c2 = st.columns(2)
-            eid = c1.text_input("ID *", eq.get("id", ""), key=f"eid_{i}")
-            elabel = c2.text_input("Label *", eq.get("label", ""), key=f"elabel_{i}")
-            ec1, ec2 = st.columns(2)
-            eunit = ec1.text_input("Unit", eq.get("unit", ""), key=f"eunit_{i}")
-            eoutput = ec2.selectbox(
+            _c1, _c2 = st.columns(2)
+            _eid = _c1.text_input("ID *", _eq.get("id", ""), key=f"eid_{_v()}_{_i}")
+            _elabel = _c2.text_input(
+                "Label *", _eq.get("label", ""), key=f"elabel_{_v()}_{_i}"
+            )
+            _ec1, _ec2 = st.columns(2)
+            _eunit = _ec1.text_input("Unit", _eq.get("unit", ""), key=f"eunit_{_v()}_{_i}")
+            _eoutput = _ec2.selectbox(
                 "Output type",
                 ["number", "integer"],
-                index=["number", "integer"].index(eq.get("output", "number") or "number"),
-                key=f"eoutput_{i}",
+                index=["number", "integer"].index(
+                    _eq.get("output", "number") or "number"
+                ),
+                key=f"eoutput_{_v()}_{_i}",
             )
-            ecompute = st.text_area(
+            _ecompute = st.text_area(
                 "Compute expression *",
-                eq.get("compute", ""),
-                key=f"ecomp_{i}",
+                _eq.get("compute", ""),
+                key=f"ecomp_{_v()}_{_i}",
                 height=80,
             )
 
-            remove = st.button("Remove equation", key=f"rm_eq_{i}")
-            if not remove:
-                updated_eqs.append(
-                    {
-                        "id": eid,
-                        "label": elabel,
-                        "unit": eunit,
-                        "output": eoutput,
-                        "compute": ecompute,
-                    }
-                )
+            st.button(
+                "Remove equation", key=f"rm_eq_{_v()}_{_i}",
+                on_click=_remove_item, args=("equations", _i),
+            )
+            _updated_eqs.append(
+                {
+                    "id": _eid,
+                    "label": _elabel,
+                    "unit": _eunit,
+                    "output": _eoutput,
+                    "compute": _ecompute,
+                }
+            )
 
-    if st.button("＋ Add equation"):
-        updated_eqs.append(
-            {"id": "", "label": "", "unit": "", "output": "number", "compute": ""}
-        )
-    st.session_state["equations"] = updated_eqs
+    st.button(
+        "＋ Add equation",
+        on_click=_add_item,
+        args=(
+            "equations",
+            {"id": "", "label": "", "unit": "", "output": "number", "compute": ""},
+        ),
+    )
+    _sync_list("equations", _updated_eqs)
 
 # ---- Scenarios ----
 with scenarios_tab:
@@ -234,30 +326,39 @@ with scenarios_tab:
         "Define scenarios with a unique **ID**, a **label**, and scenario **variables** "
         "as ``name: value`` lines (one per line)."
     )
-    scenarios: list[dict[str, Any]] = st.session_state["scenarios"]
-    updated_scenarios: list[dict[str, Any]] = []
-    for i, sc in enumerate(scenarios):
+    _scenarios: list[dict[str, Any]] = st.session_state["scenarios"]
+    _updated_scenarios: list[dict[str, Any]] = []
+    for _i, _sc in enumerate(_scenarios):
         with st.expander(
-            sc.get("label") or sc.get("id") or f"Scenario {i + 1}",
-            expanded=(i == len(scenarios) - 1 and not sc.get("id")),
+            _sc.get("label") or _sc.get("id") or f"Scenario {_i + 1}",
+            expanded=(_i == len(_scenarios) - 1 and not _sc.get("id")),
         ):
-            c1, c2 = st.columns(2)
-            sid = c1.text_input("ID *", sc.get("id", ""), key=f"sid_{i}")
-            slabel = c2.text_input("Label *", sc.get("label", ""), key=f"slabel_{i}")
-            svars = st.text_area(
+            _c1, _c2 = st.columns(2)
+            _sid = _c1.text_input("ID *", _sc.get("id", ""), key=f"sid_{_v()}_{_i}")
+            _slabel = _c2.text_input(
+                "Label *", _sc.get("label", ""), key=f"slabel_{_v()}_{_i}"
+            )
+            _svars = st.text_area(
                 "Variables (name: value, one per line) *",
-                sc.get("vars", ""),
-                key=f"svars_{i}",
+                _sc.get("vars", ""),
+                key=f"svars_{_v()}_{_i}",
                 height=80,
             )
 
-            remove = st.button("Remove scenario", key=f"rm_sc_{i}")
-            if not remove:
-                updated_scenarios.append({"id": sid, "label": slabel, "vars": svars})
+            st.button(
+                "Remove scenario", key=f"rm_sc_{_v()}_{_i}",
+                on_click=_remove_item, args=("scenarios", _i),
+            )
+            _updated_scenarios.append(
+                {"id": _sid, "label": _slabel, "vars": _svars}
+            )
 
-    if st.button("＋ Add scenario"):
-        updated_scenarios.append({"id": "", "label": "", "vars": ""})
-    st.session_state["scenarios"] = updated_scenarios
+    st.button(
+        "＋ Add scenario",
+        on_click=_add_item,
+        args=("scenarios", {"id": "", "label": "", "vars": ""}),
+    )
+    _sync_list("scenarios", _updated_scenarios)
 
 # ---- Report ----
 with report_tab:
@@ -267,79 +368,86 @@ with report_tab:
         "**Table** and **Graph** blocks reference equation IDs. "
         "Row format: ``Label | equation_id [| emphasis]``."
     )
-    blocks: list[dict[str, Any]] = st.session_state["report_blocks"]
-    updated_blocks: list[dict[str, Any]] = []
-    for i, blk in enumerate(blocks):
-        btype = blk.get("type", "markdown")
-        with st.expander(f"{btype.title()} block {i + 1}", expanded=(i == len(blocks) - 1)):
-            new_type = st.selectbox(
+    _blocks: list[dict[str, Any]] = st.session_state["report_blocks"]
+    _updated_blocks: list[dict[str, Any]] = []
+    for _i, _blk in enumerate(_blocks):
+        _btype = _blk.get("type", "markdown")
+        with st.expander(
+            f"{_btype.title()} block {_i + 1}", expanded=(_i == len(_blocks) - 1)
+        ):
+            _new_type = st.selectbox(
                 "Block type",
                 ["markdown", "table", "figure", "graph"],
-                index=["markdown", "table", "figure", "graph"].index(btype),
-                key=f"btype_{i}",
+                index=["markdown", "table", "figure", "graph"].index(_btype),
+                key=f"btype_{_v()}_{_i}",
             )
-            entry: dict[str, Any] = {"type": new_type}
+            _entry: dict[str, Any] = {"type": _new_type}
 
-            if new_type == "markdown":
-                entry["content"] = st.text_area(
+            if _new_type == "markdown":
+                _entry["content"] = st.text_area(
                     "Content (Markdown)",
-                    blk.get("content", ""),
-                    key=f"bcontent_{i}",
+                    _blk.get("content", ""),
+                    key=f"bcontent_{_v()}_{_i}",
                     height=150,
                 )
-            elif new_type == "table":
-                entry["caption"] = st.text_input(
-                    "Caption", blk.get("caption", ""), key=f"tcap_{i}"
+            elif _new_type == "table":
+                _entry["caption"] = st.text_input(
+                    "Caption", _blk.get("caption", ""), key=f"tcap_{_v()}_{_i}"
                 )
-                entry["columns"] = st.text_input(
+                _entry["columns"] = st.text_input(
                     "Columns (comma-separated scenario IDs, blank = all)",
-                    blk.get("columns", ""),
-                    key=f"tcols_{i}",
+                    _blk.get("columns", ""),
+                    key=f"tcols_{_v()}_{_i}",
                 )
-                entry["rows"] = st.text_area(
+                _entry["rows"] = st.text_area(
                     "Rows (Label | equation_id [| emphasis])",
-                    blk.get("rows", ""),
-                    key=f"trows_{i}",
+                    _blk.get("rows", ""),
+                    key=f"trows_{_v()}_{_i}",
                     height=120,
                 )
-            elif new_type == "figure":
-                entry["id"] = st.text_input(
-                    "Figure ID", blk.get("id", ""), key=f"fid_{i}"
+            elif _new_type == "figure":
+                _entry["id"] = st.text_input(
+                    "Figure ID", _blk.get("id", ""), key=f"fid_{_v()}_{_i}"
                 )
-            elif new_type == "graph":
-                entry["kind"] = st.selectbox(
+            elif _new_type == "graph":
+                _entry["kind"] = st.selectbox(
                     "Graph kind",
                     ["bar", "stacked_bar", "line", "pie"],
                     index=["bar", "stacked_bar", "line", "pie"].index(
-                        blk.get("kind", "bar")
+                        _blk.get("kind", "bar")
                     ),
-                    key=f"gkind_{i}",
+                    key=f"gkind_{_v()}_{_i}",
                 )
-                entry["title"] = st.text_input(
-                    "Title", blk.get("title", ""), key=f"gtitle_{i}"
+                _entry["title"] = st.text_input(
+                    "Title", _blk.get("title", ""), key=f"gtitle_{_v()}_{_i}"
                 )
-                entry["caption"] = st.text_input(
-                    "Caption", blk.get("caption", ""), key=f"gcap_{i}"
+                _entry["caption"] = st.text_input(
+                    "Caption", _blk.get("caption", ""), key=f"gcap_{_v()}_{_i}"
                 )
-                entry["columns"] = st.text_input(
+                _entry["columns"] = st.text_input(
                     "Columns (comma-separated scenario IDs, blank = all)",
-                    blk.get("columns", ""),
-                    key=f"gcols_{i}",
+                    _blk.get("columns", ""),
+                    key=f"gcols_{_v()}_{_i}",
                 )
-                entry["rows"] = st.text_area(
+                _entry["rows"] = st.text_area(
                     "Rows (Label | equation_id [| emphasis])",
-                    blk.get("rows", ""),
-                    key=f"grows_{i}",
+                    _blk.get("rows", ""),
+                    key=f"grows_{_v()}_{_i}",
                     height=120,
                 )
 
-            remove = st.button("Remove block", key=f"rm_blk_{i}")
-            if not remove:
-                updated_blocks.append(entry)
+            st.button(
+                "Remove block", key=f"rm_blk_{_v()}_{_i}",
+                on_click=_remove_item, args=("report_blocks", _i),
+            )
+            _updated_blocks.append(_entry)
 
-    if st.button("＋ Add report block"):
-        updated_blocks.append({"type": "markdown", "content": ""})
-    st.session_state["report_blocks"] = updated_blocks
+    st.button(
+        "＋ Add report block",
+        on_click=_add_item,
+        args=("report_blocks", {"type": "markdown", "content": ""}),
+    )
+    _sync_list("report_blocks", _updated_blocks)
 
 # ---- Figures ----
 with figures_tab:
@@ -348,34 +456,52 @@ with figures_tab:
         "Define custom figures with Python code. These are referenced from "
         "**figure** report blocks by their **ID**."
     )
-    figs: list[dict[str, Any]] = st.session_state["figures"]
-    updated_figs: list[dict[str, Any]] = []
-    for i, fig in enumerate(figs):
+    _figs: list[dict[str, Any]] = st.session_state["figures"]
+    _updated_figs: list[dict[str, Any]] = []
+    for _i, _fig in enumerate(_figs):
         with st.expander(
-            fig.get("title") or fig.get("id") or f"Figure {i + 1}", expanded=True
+            _fig.get("title") or _fig.get("id") or f"Figure {_i + 1}",
+            expanded=True,
         ):
-            c1, c2 = st.columns(2)
-            fid = c1.text_input("ID *", fig.get("id", ""), key=f"figid_{i}")
-            ftitle = c2.text_input("Title *", fig.get("title", ""), key=f"figtitle_{i}")
-            falt = st.text_input(
-                "Alt text", fig.get("alt_text", "") or "", key=f"figalt_{i}"
+            _c1, _c2 = st.columns(2)
+            _fid = _c1.text_input(
+                "ID *", _fig.get("id", ""), key=f"figid_{_v()}_{_i}"
             )
-            fcode = st.text_area(
+            _ftitle = _c2.text_input(
+                "Title *", _fig.get("title", ""), key=f"figtitle_{_v()}_{_i}"
+            )
+            _falt = st.text_input(
+                "Alt text", _fig.get("alt_text", "") or "", key=f"figalt_{_v()}_{_i}"
+            )
+            _fcode = st.text_area(
                 "Python code",
-                fig.get("py_code", "") or "",
-                key=f"figcode_{i}",
+                _fig.get("py_code", "") or "",
+                key=f"figcode_{_v()}_{_i}",
                 height=120,
             )
 
-            remove = st.button("Remove figure", key=f"rm_fig_{i}")
-            if not remove:
-                updated_figs.append(
-                    {"id": fid, "title": ftitle, "alt_text": falt, "py_code": fcode}
-                )
+            st.button(
+                "Remove figure", key=f"rm_fig_{_v()}_{_i}",
+                on_click=_remove_item, args=("figures", _i),
+            )
+            _updated_figs.append(
+                {
+                    "id": _fid,
+                    "title": _ftitle,
+                    "alt_text": _falt,
+                    "py_code": _fcode,
+                }
+            )
 
-    if st.button("＋ Add figure"):
-        updated_figs.append({"id": "", "title": "", "alt_text": "", "py_code": ""})
-    st.session_state["figures"] = updated_figs
+    st.button(
+        "＋ Add figure",
+        on_click=_add_item,
+        args=(
+            "figures",
+            {"id": "", "title": "", "alt_text": "", "py_code": ""},
+        ),
+    )
+    _sync_list("figures", _updated_figs)
 
 # ---------------------------------------------------------------------------
 # Validate & Download
