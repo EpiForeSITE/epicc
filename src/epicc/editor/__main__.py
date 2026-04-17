@@ -68,7 +68,7 @@ def _remove_item(section: str, idx: int) -> None:
     items: list[Any] = st.session_state[section]
     if 0 <= idx < len(items):
         items.pop(idx)
-    _bump_version()
+        _bump_version()
 
 
 # ---------------------------------------------------------------------------
