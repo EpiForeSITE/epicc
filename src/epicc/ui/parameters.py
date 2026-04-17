@@ -502,7 +502,7 @@ def _render_scenario_editor(
     cnt_key = _scenario_count_key(model_key)
     ids_key = _scenario_ids_key(model_key)
 
-    # First-time initialisation
+    # First-time initialization
     if cnt_key not in st.session_state:
         _init_scenario_state(model_key, default_scenarios, specs)
 

@@ -296,14 +296,16 @@ def create_model_class(
     def parameter_specs(self) -> dict[str, Any]:
         """Return the Parameter schema objects keyed by param_id (equation-context only)."""
         return {
-            k: v for k, v in model_def.parameters.items()
+            k: v
+            for k, v in model_def.parameters.items()
             if v.context != "scenario"
         }
 
     def scenario_parameter_specs(self) -> dict[str, Any]:
         """Return the Parameter schema objects for scenario-context params."""
         return {
-            k: v for k, v in model_def.parameters.items()
+            k: v
+            for k, v in model_def.parameters.items()
             if v.context == "scenario"
         }
 
