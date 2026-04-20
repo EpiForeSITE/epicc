@@ -15,6 +15,7 @@ from epicc.ui.parameters import (
     render_sidebar_parameters,
     render_validation_error,
     reset_parameters_to_defaults,
+    reset_scenario_state,
 )
 from epicc.ui.report import get_report_renderer
 from epicc.ui.state import (
@@ -94,7 +95,7 @@ params = sync_active_model(selected_label)
 param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
-    params, label_overrides, model_defaults_flat, has_input_errors = render_sidebar_parameters(
+    params, scenario_overrides, model_defaults_flat, has_input_errors = render_sidebar_parameters(
         active_model, selected_label, params, container=param_col
     )
 
@@ -115,11 +116,14 @@ with param_col:
         reset_parameters_to_defaults(
             model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
         )
-        # Reset scenario labels if they exist
-        current_headers = active_model.scenario_labels
-        if current_headers:
-            for key, default_text in current_headers.items():
-                st.session_state[f"py_label_{model_label}_{key}"] = default_text
+        # Reset scenarios back to model defaults
+        default_scenarios = active_model.default_scenarios
+        if default_scenarios:
+            reset_scenario_state(
+                model_label,
+                default_scenarios,
+                active_model.scenario_parameter_specs or {},
+            )
     
     with button_col1:
         st.button("Reset Parameters", on_click=_handle_reset, width='stretch')
@@ -150,7 +154,9 @@ with result_col:
 
     if run_clicked:
         with st.spinner(f"Running {selected_label}..."):
-            run_output = active_model.run(typed_params, label_overrides=label_overrides)
+            run_output = active_model.run(
+                typed_params, scenario_overrides=scenario_overrides
+            )
         set_run_output(run_output)
         st.rerun()
 

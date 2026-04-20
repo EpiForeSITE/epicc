@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 from epicc.formats import VALID_PARAMETER_SUFFIXES
 from epicc.model.base import BaseSimulationModel
 from epicc.model.parameters import load_model_params
+from epicc.model.schema import Scenario, ScenarioVars
 from epicc.ui.state import (
     clear_results,
     get_active_param_identity,
@@ -66,21 +67,26 @@ def _render_spec_widget(
     spec: Parameter,
     default_value: Any,
     widget_key: str,
-    params: dict[str, Any],
+    params: dict[str, Any] | None,
     container: Any,
 ) -> None:
-    """Render a typed widget for a parameter with a full schema spec."""
+    """Render a typed widget for a parameter with a full schema spec.
+
+    When *params* is not ``None`` the widget value is stored in
+    ``params[param_id]``.  Pass ``None`` when the caller only needs
+    Streamlit session-state (e.g. the scenario editor).
+    """
     display_label = spec.label
     help_text = _build_help_text(spec)
 
     if spec.type == "boolean":
         native_default = _native_value(default_value, spec)
         if widget_key in st.session_state:
-            params[param_id] = container.checkbox(
+            result = container.checkbox(
                 display_label, key=widget_key, help=help_text
             )
         else:
-            params[param_id] = container.checkbox(
+            result = container.checkbox(
                 display_label, value=native_default, key=widget_key, help=help_text
             )
 
@@ -103,7 +109,7 @@ def _render_spec_widget(
         if widget_key not in st.session_state:
             kwargs["value"] = native_default
 
-        params[param_id] = container.number_input(**kwargs)
+        result = container.number_input(**kwargs)
 
     elif spec.type == "enum" and spec.options:
         option_keys = list(spec.options.keys())
@@ -119,21 +125,24 @@ def _render_spec_widget(
                 selectbox_kwargs["index"] = option_keys.index(str(default_value))
             except ValueError:
                 selectbox_kwargs["index"] = 0
-        params[param_id] = container.selectbox(**selectbox_kwargs)
+        result = container.selectbox(**selectbox_kwargs)
 
     else:
         # string
         if widget_key in st.session_state:
-            params[param_id] = container.text_input(
+            result = container.text_input(
                 display_label, key=widget_key, help=help_text
             )
         else:
-            params[param_id] = container.text_input(
+            result = container.text_input(
                 display_label,
                 value=str(default_value),
                 key=widget_key,
                 help=help_text,
             )
+
+    if params is not None:
+        params[param_id] = result
 
 
 def _render_param(
@@ -408,15 +417,172 @@ def build_typed_params(
     return model.parameter_model().model_validate(payload)
 
 
+_MAX_SCENARIOS = 10
+_MIN_SCENARIOS = 1
+
+
+def _scenario_count_key(model_key: str) -> str:
+    return f"{model_key}__scen_count"
+
+
+def _scenario_ids_key(model_key: str) -> str:
+    return f"{model_key}__scen_ids"
+
+
+def _scenario_label_key(model_key: str, idx: int) -> str:
+    return f"{model_key}:scen_{idx}:label"
+
+
+def _scenario_var_key(model_key: str, idx: int, var_name: str) -> str:
+    return f"{model_key}:scen_{idx}:{var_name}"
+
+
+def _init_scenario_state(
+    model_key: str,
+    defaults: list[Scenario],
+    specs: dict[str, Parameter],
+) -> None:
+    """Populate session-state entries for the scenario editor from defaults."""
+    cnt_key = _scenario_count_key(model_key)
+    ids_key = _scenario_ids_key(model_key)
+    st.session_state[cnt_key] = len(defaults)
+    st.session_state[ids_key] = [s.id for s in defaults]
+    for i, scen in enumerate(defaults):
+        st.session_state[_scenario_label_key(model_key, i)] = scen.label
+        vars_dict = scen.vars.model_dump()
+        for var_name, spec in specs.items():
+            val = vars_dict.get(var_name, spec.default)
+            st.session_state[_scenario_var_key(model_key, i, var_name)] = (
+                _native_value(val, spec)
+            )
+
+
+def reset_scenario_state(
+    model_key: str,
+    defaults: list[Scenario],
+    specs: dict[str, Parameter],
+) -> None:
+    """Reset scenario editor back to model defaults (clearing any extra scenarios)."""
+    # Clear all existing scenario widget keys
+    prefix = f"{model_key}:scen_"
+    for key in list(st.session_state.keys()):
+        if isinstance(key, str) and key.startswith(prefix):
+            del st.session_state[key]
+    _init_scenario_state(model_key, defaults, specs)
+
+
+def _collect_scenario_overrides(
+    model_key: str,
+    specs: dict[str, Parameter],
+) -> list[Scenario]:
+    """Build Scenario objects from current session-state widget values."""
+    count = st.session_state.get(_scenario_count_key(model_key), 0)
+    ids = st.session_state.get(_scenario_ids_key(model_key), [])
+    overrides: list[Scenario] = []
+    for i in range(count):
+        label = st.session_state.get(
+            _scenario_label_key(model_key, i), f"Scenario {i + 1}"
+        )
+        scen_id = ids[i] if i < len(ids) else f"custom_{i}"
+        var_dict: dict[str, Any] = {}
+        for var_name, spec in specs.items():
+            var_dict[var_name] = st.session_state.get(
+                _scenario_var_key(model_key, i, var_name), spec.default
+            )
+        overrides.append(
+            Scenario(id=scen_id, label=label, vars=ScenarioVars(**var_dict))
+        )
+    return overrides
+
+
+def _render_scenario_editor(
+    model: BaseSimulationModel,
+    model_key: str,
+    container: Any,
+) -> list[Scenario] | None:
+    """Render the scenario editor and return the current scenario list."""
+    default_scenarios = model.default_scenarios
+    if not default_scenarios:
+        return None
+
+    specs: dict[str, Parameter] = model.scenario_parameter_specs or {}
+
+    cnt_key = _scenario_count_key(model_key)
+    ids_key = _scenario_ids_key(model_key)
+
+    # First-time initialization
+    if cnt_key not in st.session_state:
+        _init_scenario_state(model_key, default_scenarios, specs)
+
+    count: int = st.session_state[cnt_key]
+    ids: list[str] = st.session_state[ids_key]
+
+    with container.expander("Scenarios", expanded=False):
+        st.caption("Configure scenario labels and parameters")
+
+        for i in range(count):
+            st.markdown(f"**Scenario {i + 1}**")
+
+            # Label input
+            lbl_key = _scenario_label_key(model_key, i)
+            st.text_input("Label", key=lbl_key)
+
+            # Variable inputs (using the same typed widgets as parameters)
+            for var_name, spec in specs.items():
+                var_key = _scenario_var_key(model_key, i, var_name)
+                _render_spec_widget(
+                    var_name, spec, spec.default, var_key, None, st
+                )
+
+            if i < count - 1:
+                st.divider()
+
+        # Add / Remove buttons
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if st.button(
+                "➕ Add Scenario",
+                disabled=count >= _MAX_SCENARIOS,
+                key=f"{model_key}__add_scen",
+            ):
+                new_idx = count
+                new_id = f"custom_{new_idx}"
+                st.session_state[cnt_key] = count + 1
+                st.session_state[ids_key] = ids + [new_id]
+                st.session_state[_scenario_label_key(model_key, new_idx)] = (
+                    f"Scenario {new_idx + 1}"
+                )
+                for var_name, spec in specs.items():
+                    st.session_state[
+                        _scenario_var_key(model_key, new_idx, var_name)
+                    ] = _native_value(spec.default, spec)
+                st.rerun()
+        with btn_col2:
+            if st.button(
+                "➖ Remove Scenario",
+                disabled=count <= _MIN_SCENARIOS,
+                key=f"{model_key}__rm_scen",
+            ):
+                last = count - 1
+                st.session_state[cnt_key] = last
+                st.session_state[ids_key] = ids[:last]
+                # Clear widget keys for the removed scenario
+                for key in list(st.session_state.keys()):
+                    if isinstance(key, str) and key.startswith(f"{model_key}:scen_{last}:"):
+                        del st.session_state[key]
+                st.rerun()
+
+    return _collect_scenario_overrides(model_key, specs)
+
+
 def render_sidebar_parameters(
     model: BaseSimulationModel,
     model_key: str,
     params: dict[str, Any],
     *,
     container: Any = None,
-) -> tuple[dict[str, Any], dict[str, str], dict[str, Any], bool]:
+) -> tuple[dict[str, Any], list[Scenario] | None, dict[str, Any], bool]:
     """Render the full parameter panel for model inside container."""
-    label_overrides: dict[str, str] = {}
     ct = container if container is not None else st
 
     uploaded = ct.file_uploader(
@@ -452,43 +618,28 @@ def render_sidebar_parameters(
         )
     except ValidationError as exc:
         render_validation_error(model.human_name(), exc, container=ct)
-        return params, label_overrides, {}, True
+        return params, None, {}, True
     except ValueError as exc:
         ct.error(f"Could not read parameter file for {model.human_name()}: {exc}")
-        return params, label_overrides, {}, True
+        return params, None, {}, True
 
     if not model_defaults:
         ct.info("No default parameters defined for this model.")
-        return params, label_overrides, {}, True
+        return params, None, {}, True
 
     # Handle refresh when new file uploaded - reset parameters to defaults
     if should_refresh:
         reset_parameters_to_defaults(
             model_defaults, params, model_key, param_specs=model.parameter_specs
         )
-        # Reset scenario labels if they exist  
-        current_headers = model.scenario_labels
-        if current_headers:
-            for key, default_text in current_headers.items():
-                st.session_state[f"py_label_{model_key}_{key}"] = default_text
+        # Reset scenarios back to model defaults
+        default_scenarios = model.default_scenarios
+        if default_scenarios:
+            specs: dict[str, Parameter] = model.scenario_parameter_specs or {}
+            reset_scenario_state(model_key, default_scenarios, specs)
 
-    current_headers = model.scenario_labels
-    if current_headers:
-        with ct.expander("Output Scenario Headers", expanded=False):
-            st.caption("Rename the output headers")
-            for key, default_text in current_headers.items():
-                widget_key = f"py_label_{model_key}_{key}"
-                default_label = str(default_text)
-                if widget_key not in st.session_state:
-                    label_overrides[key] = st.text_input(
-                        f"Label for '{default_label}'",
-                        value=default_label,
-                        key=widget_key,
-                    )
-                else:
-                    label_overrides[key] = st.text_input(
-                        f"Label for '{default_label}'", key=widget_key
-                    )
+    # Scenario editor (replaces the old label-only "Output Scenario Headers")
+    scenario_overrides = _render_scenario_editor(model, model_key, ct)
 
     render_parameters_with_indent(
         model_defaults,
@@ -499,5 +650,5 @@ def render_sidebar_parameters(
         container=ct,
     )
 
-    return params, label_overrides, model_defaults, False
+    return params, scenario_overrides, model_defaults, False
 
