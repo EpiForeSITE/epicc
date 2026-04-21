@@ -116,17 +116,18 @@ with st.sidebar:
     if uploaded is not None:
         file_id = f"{uploaded.name}:{uploaded.size}"
         if st.session_state.get("_uploaded_file_id") != file_id:
-            st.session_state["_uploaded_file_id"] = file_id
             try:
                 state = yaml_to_state(uploaded.getvalue())
             except Exception as exc:
                 _show_upload_error(str(exc))
             else:
+                st.session_state["_uploaded_file_id"] = file_id
                 _bump_version()
                 for k, v in state.items():
                     st.session_state[k] = v
                 st.rerun()
-        st.success(f"Loaded **{uploaded.name}**")
+        if st.session_state.get("_uploaded_file_id") == file_id:
+            st.success(f"Loaded **{uploaded.name}**")
 
 # ---------------------------------------------------------------------------
 # Sync helper – read widget values back into the canonical list
@@ -541,7 +542,8 @@ with val_col:
             st.success("Model is valid! ✅")
         except ValidationError as exc:
             issues = exc.errors()
-            st.error(f"Validation failed ❌ ({len(issues)} issue{'s' if len(issues) != 1 else ''})")
+            issue_word = "issue" if len(issues) == 1 else "issues"
+            st.error(f"Validation failed ❌ ({len(issues)} {issue_word})")
             with st.expander("Validation details", expanded=True):
                 for issue in issues:
                     loc_parts = issue.get("loc", [])
