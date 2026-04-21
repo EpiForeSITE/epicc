@@ -54,14 +54,14 @@ def _bump_version() -> None:
 # ---------------------------------------------------------------------------
 
 
-@st.dialog("⚠ YAML Serialization Error")
+@st.dialog("YAML Serialization Error")
 def _show_yaml_error(msg: str) -> None:
     """Show a YAML serialization error in a modal dialog."""
     st.error("The current form data could not be serialized to YAML.")
     st.code(msg)
 
 
-@st.dialog("⚠ File Load Error")
+@st.dialog("File Load Error")
 def _show_upload_error(msg: str) -> None:
     """Show a file-load error in a modal dialog."""
     st.error("The uploaded file could not be loaded.")
@@ -174,7 +174,7 @@ with meta_tab:
             "Email", _author["email"], key=f"author_email_{_v()}_{_i}"
         )
         _cols[2].button(
-            "✕", key=f"rm_author_{_v()}_{_i}",
+            "X", key=f"rm_author_{_v()}_{_i}",
             on_click=_remove_item, args=("authors", _i),
         )
         _updated_authors.append({"name": _name, "email": _email})
@@ -535,15 +535,15 @@ st.divider()
 val_col, dl_col = st.columns([1, 1])
 
 with val_col:
-    if st.button("✔ Validate model", type="primary", use_container_width=True):
+    if st.button("Validate model", type="primary", use_container_width=True):
         doc = build_model_dict({str(k): v for k, v in st.session_state.items()})
         try:
             validate_model_dict(doc)
-            st.success("Model is valid! ✅")
+            st.success("Model is valid!")
         except ValidationError as exc:
             issues = exc.errors()
             issue_word = "issue" if len(issues) == 1 else "issues"
-            st.error(f"Validation failed ❌ ({len(issues)} {issue_word})")
+            st.error(f"Validation failed ({len(issues)} {issue_word})")
             with st.expander("Validation details", expanded=True):
                 for issue in issues:
                     loc_parts = issue.get("loc", [])
@@ -560,7 +560,7 @@ with dl_col:
 
     if yaml_bytes:
         st.download_button(
-            "⬇ Download YAML",
+            "Download YAML",
             data=yaml_bytes,
             file_name="model.yaml",
             mime="text/yaml",
