@@ -371,7 +371,8 @@ def build_model_dict(state: EditorState) -> dict[str, Any]:
 def validate_model_dict(doc: dict[str, Any]) -> Model:
     """Validate a model document dict against the ``Model`` schema.
 
-    Raises :class:`ValueError` on validation failure.
+    Raises:
+        pydantic.ValidationError: if *doc* does not conform to the schema.
     """
     return opaque_to_typed(doc, Model)
 

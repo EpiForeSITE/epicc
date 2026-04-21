@@ -61,6 +61,13 @@ def _show_yaml_error(msg: str) -> None:
     st.code(msg)
 
 
+@st.dialog("⚠ File Load Error")
+def _show_upload_error(msg: str) -> None:
+    """Show a file-load error in a modal dialog."""
+    st.error("The uploaded file could not be loaded.")
+    st.code(msg)
+
+
 def _v() -> int:
     """Return the current widget-key version."""
     return int(st.session_state.get("_wv", 0))
@@ -110,11 +117,15 @@ with st.sidebar:
         file_id = f"{uploaded.name}:{uploaded.size}"
         if st.session_state.get("_uploaded_file_id") != file_id:
             st.session_state["_uploaded_file_id"] = file_id
-            state = yaml_to_state(uploaded.getvalue())
-            _bump_version()
-            for k, v in state.items():
-                st.session_state[k] = v
-            st.rerun()
+            try:
+                state = yaml_to_state(uploaded.getvalue())
+            except Exception as exc:
+                _show_upload_error(str(exc))
+            else:
+                _bump_version()
+                for k, v in state.items():
+                    st.session_state[k] = v
+                st.rerun()
         st.success(f"Loaded **{uploaded.name}**")
 
 # ---------------------------------------------------------------------------
@@ -528,9 +539,14 @@ with val_col:
         try:
             validate_model_dict(doc)
             st.success("Model is valid! ✅")
-        except (ValidationError, ValueError) as exc:
-            st.error("Validation failed ❌")
-            st.code(str(exc))
+        except ValidationError as exc:
+            issues = exc.errors()
+            st.error(f"Validation failed ❌ ({len(issues)} issue{'s' if len(issues) != 1 else ''})")
+            with st.expander("Validation details", expanded=True):
+                for issue in issues:
+                    loc_parts = issue.get("loc", [])
+                    path = " > ".join(str(p) for p in loc_parts) if loc_parts else "(root)"
+                    st.write(f"- **{path}**: {issue.get('msg', 'Invalid value')}")
 
 with dl_col:
     doc = build_model_dict({str(k): v for k, v in st.session_state.items()})

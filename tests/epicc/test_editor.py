@@ -21,6 +21,7 @@ from epicc.editor.helpers import (
 from epicc.formats import opaque_to_typed
 from epicc.formats.yaml import YAMLFormat
 from epicc.model.schema import Model
+from pydantic import ValidationError
 
 
 # ---------------------------------------------------------------------------
@@ -219,19 +220,19 @@ class TestValidateModelDict:
     def test_missing_title_fails(self) -> None:
         doc = self._minimal_doc()
         del doc["title"]
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             validate_model_dict(doc)
 
     def test_invalid_parameter_type_fails(self) -> None:
         doc = self._minimal_doc()
         doc["parameters"]["x"]["type"] = "invalid_type"
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             validate_model_dict(doc)
 
     def test_enum_without_options_fails(self) -> None:
         doc = self._minimal_doc()
         doc["parameters"]["x"]["type"] = "enum"
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             validate_model_dict(doc)
 
     def test_enum_with_options_valid(self) -> None:

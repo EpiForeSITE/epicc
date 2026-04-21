@@ -76,12 +76,11 @@ def get_format(path: Path | str) -> BaseFormat:
 def opaque_to_typed(data: dict, model: type[M]) -> M:
     """
     Validate the given data against a given Pydantic model.
-    """
 
-    try:
-        return model.model_validate(data)
-    except Exception as e:
-        raise ValueError(f"Data validation failed: {e}") from e
+    Raises:
+        pydantic.ValidationError: if *data* does not conform to *model*'s schema.
+    """
+    return model.model_validate(data)
 
 
 def read_from_format(path: Path | str, data: IO, model: type[M]) -> tuple[M, Any]:
