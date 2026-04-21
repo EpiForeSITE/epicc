@@ -49,6 +49,18 @@ def _bump_version() -> None:
     st.session_state["_wv"] = st.session_state.get("_wv", 0) + 1
 
 
+# ---------------------------------------------------------------------------
+# Modal dialogs
+# ---------------------------------------------------------------------------
+
+
+@st.dialog("⚠ YAML Serialization Error")
+def _show_yaml_error(msg: str) -> None:
+    """Show a YAML serialization error in a modal dialog."""
+    st.error("The current form data could not be serialized to YAML.")
+    st.code(msg)
+
+
 def _v() -> int:
     """Return the current widget-key version."""
     return int(st.session_state.get("_wv", 0))
@@ -524,8 +536,9 @@ with dl_col:
     doc = build_model_dict({str(k): v for k, v in st.session_state.items()})
     try:
         yaml_bytes = serialize_to_yaml(doc)
-    except Exception:
+    except Exception as exc:
         yaml_bytes = b""
+        _show_yaml_error(str(exc))
 
     if yaml_bytes:
         st.download_button(
