@@ -79,6 +79,16 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     padding-bottom: 1rem;
 }
 
+/* On narrow/mobile viewports the columns stack vertically, so disable sticky
+   positioning to prevent the parameter panel from overlapping the report. */
+@media (max-width: 768px) {
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child {
+        position: static;
+        max-height: none;
+        overflow-y: visible;
+    }
+}
+
 /* Print rules to hide controls/chrome and keep the rendered results visible */
 @media print {
     @page {
