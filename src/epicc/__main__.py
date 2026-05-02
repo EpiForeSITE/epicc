@@ -8,6 +8,7 @@ from epicc.model.models import get_all_models
 from epicc.ui.export import (
     render_parameter_export_modal,
     render_pdf_export_button,
+    render_docx_export_button,
     trigger_print_if_requested,
 )
 from epicc.ui.parameters import (
@@ -171,4 +172,9 @@ with result_col:
 
     st.divider()
     render_pdf_export_button(container=result_col)
+    render_docx_export_button(
+        active_model,  # pass model object, not title string
+        get_run_output() if has_results() else None,
+        container=result_col,
+    )
 

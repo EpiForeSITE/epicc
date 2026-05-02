@@ -18,6 +18,7 @@ from typing import IO, Any, Iterator, TypeVar
 from pydantic import BaseModel
 
 from epicc.formats.base import BaseFormat
+from epicc.formats.docx import DOCXFormat
 from epicc.formats.template import generate_template
 from epicc.formats.xlsx import XLSXFormat
 from epicc.formats.yaml import YAMLFormat
@@ -29,6 +30,7 @@ _FORMATS: dict[str, type[BaseFormat]] = {
     ".yaml": YAMLFormat,
     ".yml": YAMLFormat,
     ".xlsx": XLSXFormat,
+    ".docx": DOCXFormat,
 }
 
 
