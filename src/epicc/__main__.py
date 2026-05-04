@@ -31,6 +31,40 @@ st.set_page_config(page_title="EPICC Cost Calculator", layout="wide")
 load_styles()
 initialize_state()
 
+# Normalize action-row button alignment (button vs popover trigger)
+st.markdown(
+    """
+    <style>
+    /* Action row wrapper */
+    .st-key-param-actions-row [data-testid="stHorizontalBlock"] {
+        align-items: flex-start !important;
+    }
+
+    /* Normalize column internal spacing */
+    .st-key-param-actions-row [data-testid="column"] > div {
+        padding-top: 0 !important;
+    }
+    .st-key-param-actions-row [data-testid="stElementContainer"] {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Make trigger controls fill width and remove extra top offset */
+    .st-key-param-actions-row [data-testid="stButton"],
+    .st-key-param-actions-row [data-testid="stPopover"] {
+        width: 100%;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    .st-key-param-actions-row [data-testid="stButton"] > button,
+    .st-key-param-actions-row [data-testid="stPopover"] > button {
+        width: 100%;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 
@@ -107,16 +141,12 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    # Reset and Save Parameters buttons side by side 
-    button_col1, button_col2 = st.columns(2)
-    
     # Reset Parameters button
     def _handle_reset() -> None:
         model_label = cast(str, selected_label)  # Safe because we checked above
         reset_parameters_to_defaults(
             model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
         )
-        # Reset scenarios back to model defaults
         default_scenarios = active_model.default_scenarios
         if default_scenarios:
             reset_scenario_state(
@@ -124,12 +154,12 @@ with param_col:
                 default_scenarios,
                 active_model.scenario_parameter_specs or {},
             )
-    
-    with button_col1:
-        st.button("Reset Parameters", on_click=_handle_reset, width='stretch')
-    
-    # Save Parameters button (only enabled when parameters are valid)
-    with button_col2:
+
+    # Force both controls into the same keyed row for CSS alignment
+    with st.container(key="param-actions-row"):
+        button_col1, button_col2 = st.columns(2, gap="small", vertical_alignment="top")
+        button_col1.button("Reset Parameters", on_click=_handle_reset, width="stretch")
+
         if typed_params is not None:
             render_parameter_export_modal(
                 active_model.human_name(),
@@ -138,7 +168,12 @@ with param_col:
                 container=button_col2,
             )
         else:
-            st.button("Save Parameters", disabled=True, width='stretch', help="Fix parameter errors first")
+            button_col2.button(
+                "Save Parameters",
+                disabled=True,
+                width="stretch",
+                help="Fix parameter errors first",
+            )
 
     st.divider()
     run_clicked = st.button(
