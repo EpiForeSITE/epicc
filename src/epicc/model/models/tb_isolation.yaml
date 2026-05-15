@@ -327,9 +327,13 @@ report:
       direct isolation costs, lost productivity, and the long-term costs of secondary TB
       infections.
 
+      <div style="text-align: center;">
+
       $$
-      \LaTeX \text{ test.}
+      \text{LaTeX test.}
       $$
+
+      </div>
 
       ## Scenarios
       - **14-day Isolation**: Standard isolation protocol for infectious TB patients

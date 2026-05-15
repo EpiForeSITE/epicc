@@ -60,6 +60,80 @@ st.markdown(
     .st-key-param-actions-row [data-testid="stPopover"] > button {
         width: 100%;
     }
+
+    /* Report spacing: keep headings away from charts */
+    .st-key-results-report [data-testid="stPlotlyChart"],
+    .st-key-results-report [data-testid="stVegaLiteChart"],
+    .st-key-results-report [data-testid="stPyplot"] {
+        margin-bottom: 2rem !important;
+    }
+
+    .st-key-results-report [data-testid="stMarkdownContainer"] h1,
+    .st-key-results-report [data-testid="stMarkdownContainer"] h2,
+    .st-key-results-report [data-testid="stMarkdownContainer"] h3 {
+        margin-top: 1.25rem !important;
+    }
+
+    /* -------- Print/PDF display fixes only (SINGLE CONSOLIDATED BLOCK) -------- */
+    @media print {
+        /* Scope strictly to report area */
+        .st-key-results-report {
+            overflow: visible !important;
+        }
+
+        /* 1) Keep chart block in flow + reserve vertical space below chart */
+        .st-key-results-report [data-testid="stPlotlyChart"],
+        .st-key-results-report [data-testid="stVegaLiteChart"],
+        .st-key-results-report [data-testid="stPyplot"] {
+            display: block !important;
+            position: static !important;
+            clear: both !important;
+            overflow: visible !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+            margin: 0 0 2.8rem 0 !important;
+            padding-bottom: 1.2rem !important;
+        }
+
+        /* Prevent Plotly print-height collapse */
+        .st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot {
+            min-height: 520px !important;
+        }
+
+        /* 2) Ensure headings/text start after chart and have breathing room */
+        .st-key-results-report h1,
+        .st-key-results-report h2,
+        .st-key-results-report h3,
+        .st-key-results-report h4,
+        .st-key-results-report p,
+        .st-key-results-report [data-testid="stMarkdownContainer"] {
+            clear: both !important;
+            position: static !important;
+            z-index: auto !important;
+            margin-top: 1.5rem !important;
+        }
+
+        .st-key-results-report [data-testid="stMarkdownContainer"] h1,
+        .st-key-results-report [data-testid="stMarkdownContainer"] h2,
+        .st-key-results-report [data-testid="stMarkdownContainer"] h3 {
+            margin-top: 1.5rem !important;
+            clear: both !important;
+        }
+
+        /* 3) Formula print fix: show only visual layer, hide assistive MathML */
+        .st-key-results-report .katex,
+        .st-key-results-report .katex-display,
+        .st-key-results-report mjx-container,
+        .st-key-results-report .MathJax {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+
+        .st-key-results-report .katex .katex-mathml,
+        .st-key-results-report mjx-assistive-mml {
+            display: none !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -206,4 +280,3 @@ with result_col:
 
     st.divider()
     render_pdf_export_button(container=result_col)
-
