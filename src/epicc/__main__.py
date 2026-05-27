@@ -232,7 +232,12 @@ with param_col:
     # Force both controls into the same keyed row for CSS alignment
     with st.container(key="param-actions-row"):
         button_col1, button_col2 = st.columns(2, gap="small", vertical_alignment="top")
-        button_col1.button("Reset Parameters", on_click=_handle_reset, width="stretch")
+
+        button_col1.button(
+            "Reset Parameters",
+            on_click=_handle_reset,
+            use_container_width=True,
+        )
 
         if typed_params is not None:
             render_parameter_export_modal(
@@ -245,13 +250,16 @@ with param_col:
             button_col2.button(
                 "Save Parameters",
                 disabled=True,
-                width="stretch",
+                use_container_width=True,
                 help="Fix parameter errors first",
             )
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, width='stretch', type='primary'
+        "Run Simulation",
+        disabled=has_input_errors,
+        use_container_width=True,
+        type="primary",
     )
 
 with result_col:
