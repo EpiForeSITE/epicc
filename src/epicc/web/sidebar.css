@@ -131,7 +131,7 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     .stDataFrame,
     .stAgGrid,
     .stTable {
-        padding-top: 1.5rem !important;
+        padding-top: 0.5rem !important;
         padding-bottom: 1.5rem !important;
     }
 
@@ -159,4 +159,175 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     .st-key-results-report * {
         display: revert !important;
     }
+}
+
+/* Action row wrapper */
+.st-key-param-actions-row [data-testid="stHorizontalBlock"] {
+    align-items: flex-start !important;
+}
+
+/* Normalize column internal spacing */
+.st-key-param-actions-row [data-testid="column"] > div {
+    padding-top: 0 !important;
+}
+.st-key-param-actions-row [data-testid="stElementContainer"] {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Make trigger controls fill width and remove extra top offset */
+.st-key-param-actions-row [data-testid="stButton"],
+.st-key-param-actions-row [data-testid="stPopover"] {
+    width: 100%;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+.st-key-param-actions-row [data-testid="stButton"] > button,
+.st-key-param-actions-row [data-testid="stPopover"] > button {
+    width: 100%;
+}
+
+/* Report spacing: keep headings away from charts */
+.st-key-results-report [data-testid="stPlotlyChart"],
+.st-key-results-report [data-testid="stVegaLiteChart"],
+.st-key-results-report [data-testid="stPyplot"] {
+    margin-bottom: 2rem !important;
+}
+
+.st-key-results-report [data-testid="stMarkdownContainer"] h1,
+.st-key-results-report [data-testid="stMarkdownContainer"] h2,
+.st-key-results-report [data-testid="stMarkdownContainer"] h3 {
+    margin-top: 1.25rem !important;
+}
+
+/* -------- Print/PDF display fixes only (SINGLE CONSOLIDATED BLOCK) -------- */
+@media print {
+    /* Scope strictly to report area */
+    .st-key-results-report {
+        overflow: visible !important;
+    }
+
+    /* 1) Keep chart block in flow + reserve vertical space below chart */
+    .st-key-results-report [data-testid="stPlotlyChart"],
+    .st-key-results-report [data-testid="stVegaLiteChart"],
+    .st-key-results-report [data-testid="stPyplot"] {
+        display: block !important;
+        position: static !important;
+        clear: both !important;
+        overflow: visible !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        margin: 0 0 2.8rem 0 !important;
+        padding-bottom: 1.2rem !important;
+    }
+
+    /* Prevent Plotly print-height collapse */
+    .st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot {
+        min-height: 520px !important;
+    }
+
+    /* 2) Ensure headings/text start after chart and have breathing room */
+    .st-key-results-report h1,
+    .st-key-results-report h2,
+    .st-key-results-report h3,
+    .st-key-results-report h4,
+    .st-key-results-report p,
+    .st-key-results-report [data-testid="stMarkdownContainer"] {
+        clear: both !important;
+        position: static !important;
+        z-index: auto !important;
+        margin-top: 2rem !important;
+    }
+
+    .st-key-results-report [data-testid="stMarkdownContainer"] h1,
+    .st-key-results-report [data-testid="stMarkdownContainer"] h2,
+    .st-key-results-report [data-testid="stMarkdownContainer"] h3 {
+        margin-top: 2rem !important;
+        clear: both !important;
+    }
+
+    /* 3) Formula print fix: show only visual layer, hide assistive MathML */
+    .st-key-results-report .katex,
+    .st-key-results-report .katex-display,
+    .st-key-results-report mjx-container,
+    .st-key-results-report .MathJax {
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .st-key-results-report .katex .katex-mathml,
+    .st-key-results-report mjx-assistive-mml {
+        display: none !important;
+    }
+
+    /* 4) Force strong chart/text contrast for PDF export */
+    .st-key-results-report,
+    .st-key-results-report * {
+        color: #111827 !important;
+        text-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .st-key-results-report [data-testid="stPlotlyChart"],
+    .st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot,
+    .st-key-results-report [data-testid="stPlotlyChart"] .plot-container,
+    .st-key-results-report [data-testid="stPlotlyChart"] .main-svg {
+        color: #111827 !important;
+    }
+
+    .st-key-results-report .js-plotly-plot text,
+    .st-key-results-report .js-plotly-plot .legendtext,
+    .st-key-results-report .js-plotly-plot .gtitle,
+    .st-key-results-report .js-plotly-plot .xtick text,
+    .st-key-results-report .js-plotly-plot .ytick text,
+    .st-key-results-report .js-plotly-plot .annotation text,
+    .st-key-results-report .js-plotly-plot .infolayer text {
+        fill: #111827 !important;
+        color: #111827 !important;
+    }
+
+    .st-key-results-report .js-plotly-plot .xaxislayer-above path,
+    .st-key-results-report .js-plotly-plot .yaxislayer-above path,
+    .st-key-results-report .js-plotly-plot .xaxislayer-above line,
+    .st-key-results-report .js-plotly-plot .yaxislayer-above line {
+        stroke: #111827 !important;
+        stroke-opacity: 1 !important;
+        stroke-width: 1.2 !important;
+    }
+
+    .st-key-results-report .js-plotly-plot .gridlayer path,
+    .st-key-results-report .js-plotly-plot .gridlayer line,
+    .st-key-results-report .js-plotly-plot .zerolinelayer path,
+    .st-key-results-report .js-plotly-plot .zerolinelayer line {
+        stroke: #9ca3af !important;
+        stroke-opacity: 0.9 !important;
+    }
+
+    .st-key-results-report .js-plotly-plot .scatterlayer .trace path,
+    .st-key-results-report .js-plotly-plot .barlayer .trace path {
+        stroke-opacity: 1 !important;
+    }
+}
+
+/* Plotly text contrast follows the active Streamlit theme */
+.st-key-results-report [data-testid="stPlotlyChart"] {
+    color: inherit !important;
+}
+
+.st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot,
+.st-key-results-report [data-testid="stPlotlyChart"] .plot-container,
+.st-key-results-report [data-testid="stPlotlyChart"] .main-svg {
+    color: inherit !important;
+}
+
+.st-key-results-report .js-plotly-plot text,
+.st-key-results-report .js-plotly-plot .legendtext,
+.st-key-results-report .js-plotly-plot .gtitle,
+.st-key-results-report .js-plotly-plot .xtick text,
+.st-key-results-report .js-plotly-plot .ytick text,
+.st-key-results-report .js-plotly-plot .annotation text,
+.st-key-results-report .js-plotly-plot .infolayer text {
+    fill: currentColor !important;
+    color: inherit !important;
 }

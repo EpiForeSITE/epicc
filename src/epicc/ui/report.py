@@ -172,20 +172,25 @@ class GraphBlockRenderer(BlockRenderer):
             if self._block.title:
                 st.markdown(
                     f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
-                    f"<span style='font-size: 1.1rem; font-weight: 600; color: #1f1f1f;'>"
+                    f"<span style='font-size: 1.1rem; font-weight: 600; color: inherit;'>"
                     f"{self._block.title}</span></div>",
                     unsafe_allow_html=True,
                 )
 
             if self._block.caption:
                 st.markdown(
-                    f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
-                    f"<span style='font-size: 0.9rem; color: #6c757d;'>"
+                    f"<div style='text-align: center; margin-bottom: 0.6rem;'>"
+                    f"<span style='font-size: 0.9rem; color: var(--text-color); opacity: 0.8;'>"
                     f"{self._block.caption}</span></div>",
                     unsafe_allow_html=True
                 )
 
-            st.plotly_chart(fig, width='stretch', key=f'plotly-{self._uuid}')
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"plotly-{self._uuid}",
+            )
+            _apply_plotly_theme_fix(self._uuid)
 
     def _resolve_columns(
         self, run_results: dict[str, Any]
@@ -278,6 +283,80 @@ def _raw_value(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _apply_plotly_theme_fix(block_uuid: str) -> None:
+    st.html(
+        f"""
+        <script>
+        (() => {{
+            const blockClass = "st-key-graph-block-{block_uuid}";
+
+            const parseColor = (value) => {{
+                const match = value && value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+                if (!match) return null;
+                return [Number(match[1]), Number(match[2]), Number(match[3])];
+            }};
+
+            const toRgba = (rgb, alpha) => {{
+                if (!rgb) return null;
+                return `rgba(${{rgb[0]}}, ${{rgb[1]}}, ${{rgb[2]}}, ${{alpha}})`;
+            }};
+
+            const patchPlot = (plot) => {{
+                const block = plot.closest(`.${{blockClass}}`) || plot.closest('[class^="st-key-graph-block-"]');
+                const colorSource = block || plot.closest('.st-key-results-report') || document.body;
+                const computed = window.getComputedStyle(colorSource);
+                const textColor = computed.color || 'rgb(17, 24, 39)';
+                const rgb = parseColor(textColor) || [17, 24, 39];
+                const axisColor = toRgba(rgb, 0.78);
+                const gridColor = toRgba(rgb, 0.18);
+
+                if (!window.Plotly || plot.dataset.epiccThemePatched === textColor) {{
+                    return;
+                }};
+
+                window.Plotly.relayout(plot, {{
+                    font: {{ color: textColor }},
+                    legend: {{
+                        font: {{ color: textColor }},
+                    }},
+                    xaxis: {{
+                        tickfont: {{ color: textColor }},
+                        color: textColor,
+                        linecolor: axisColor,
+                        tickcolor: axisColor,
+                        zerolinecolor: gridColor,
+                        gridcolor: gridColor,
+                    }},
+                    yaxis: {{
+                        tickfont: {{ color: textColor }},
+                        color: textColor,
+                        linecolor: axisColor,
+                        tickcolor: axisColor,
+                        zerolinecolor: gridColor,
+                        gridcolor: gridColor,
+                    }},
+                }});
+
+                plot.dataset.epiccThemePatched = textColor;
+            }};
+
+            const run = () => {{
+                document
+                    .querySelectorAll(`.${{blockClass}} .js-plotly-plot`)
+                    .forEach(patchPlot);
+            }};
+
+            run();
+            requestAnimationFrame(run);
+            setTimeout(run, 150);
+            setTimeout(run, 500);
+        }})();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
 
 
 class ReportRenderer:
