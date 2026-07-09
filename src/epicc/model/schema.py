@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -31,16 +31,20 @@ class Parameter(BaseModel):
             "context (rendered inside each scenario block)."
         ),
     )
-    
-    @model_validator(mode='after')
-    def validate_enum_options(self) -> 'Parameter':
+
+    @model_validator(mode="after")
+    def validate_enum_options(self) -> "Parameter":
         """Ensure enum parameters have options and non-enum parameters don't."""
-        if self.type == 'enum':
+        if self.type == "enum":
             if not self.options:
-                raise ValueError("Parameter with type='enum' must have 'options' defined")
+                raise ValueError(
+                    "Parameter with type='enum' must have 'options' defined"
+                )
         else:
             if self.options is not None:
-                raise ValueError(f"Parameter with type='{self.type}' cannot have 'options' (only enum parameters can)")
+                raise ValueError(
+                    f"Parameter with type='{self.type}' cannot have 'options' (only enum parameters can)"
+                )
         return self
 
 
@@ -97,7 +101,9 @@ class TableBlock(BaseModel):
 
 class FigureBlock(BaseModel):
     type: Literal["figure"]
-    id: str = Field(..., description="References an entry in the top-level figures list.")
+    id: str = Field(
+        ..., description="References an entry in the top-level figures list."
+    )
 
 
 class GraphBlock(BaseModel):
@@ -127,6 +133,12 @@ class Figure(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class Preset(BaseModel):
+    id: str
+    label: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class Model(BaseModel):
     title: str
     description: str
@@ -140,6 +152,7 @@ class Model(BaseModel):
     scenarios: list[Scenario]
     report: list[ReportBlock]
     figures: list[Figure] = Field(default_factory=list)
+    presets: list[Preset] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_scenario_vars(self) -> "Model":
@@ -202,4 +215,14 @@ class Model(BaseModel):
         return self.scenarios
 
 
-__all__ = ["Model", "ParameterGroup", "TableRow", "TableBlock", "MarkdownBlock", "FigureBlock", "GraphBlock", "ReportBlock"]
+__all__ = [
+    "Model",
+    "ParameterGroup",
+    "Preset",
+    "TableRow",
+    "TableBlock",
+    "MarkdownBlock",
+    "FigureBlock",
+    "GraphBlock",
+    "ReportBlock",
+]

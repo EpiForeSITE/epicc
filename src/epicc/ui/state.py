@@ -11,6 +11,11 @@ _ACTIVE_MODEL_KEY = "active_model_key"
 _ACTIVE_PARAM_IDENTITY_KEY = "active_param_identity"
 _PARAMS_KEY = "params"
 _UPLOAD_HASH_CACHE_KEY = "_upload_hash_cache"
+_PRESET_STACK_KEY_PREFIX = "_preset_stack_"
+_PRESET_MODAL_WORKING_KEY_PREFIX = "_modal_wstack_"
+_PRESET_MODAL_OP_KEY_PREFIX = "_pop_"
+_PRESET_MODAL_ADD_CTR_KEY_PREFIX = "_padd_ctr_"
+_FILE_PRESET_KEY_PREFIX = "_file_preset_"
 
 
 def initialize_state() -> None:
@@ -33,6 +38,11 @@ def sync_active_model(model_key: str) -> dict[str, Any]:
         # Clear file uploader state when switching models
         st.session_state.pop(_UPLOAD_HASH_CACHE_KEY, None)
         st.session_state.pop(_ACTIVE_PARAM_IDENTITY_KEY, None)
+        st.session_state.pop(_PRESET_STACK_KEY_PREFIX + model_key, None)
+        st.session_state.pop(_PRESET_MODAL_WORKING_KEY_PREFIX + model_key, None)
+        st.session_state.pop(_PRESET_MODAL_OP_KEY_PREFIX + model_key, None)
+        st.session_state.pop(_PRESET_MODAL_ADD_CTR_KEY_PREFIX + model_key, None)
+        st.session_state.pop(_FILE_PRESET_KEY_PREFIX + model_key, None)
 
     st.session_state.setdefault(_PARAMS_KEY, {})
     return st.session_state[_PARAMS_KEY]

@@ -76,6 +76,8 @@ def render_parameter_export_modal(
     model_name: str,
     param_data: dict[str, Any],
     *,
+    label: str = "Save Parameters",
+    disabled: bool = False,
     pydantic_model: type[BaseModel] | None = None,
     container: Any = None,
 ) -> None:
@@ -90,7 +92,7 @@ def render_parameter_export_modal(
             seen.add(cls)
             unique.append((suffix.lstrip("."), cls))
     
-    if rc.button("Save Parameters", width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}"):
+    if rc.button(label, width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}", disabled=disabled):
         _export_dialog(model_name, param_data, unique, pydantic_model)
 
 

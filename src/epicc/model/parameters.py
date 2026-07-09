@@ -54,13 +54,21 @@ def _load_typed_params(
     return typed.model_dump(by_alias=True)
 
 
+def parse_preset_from_file(
+    filename: str,
+    data: IO[bytes],
+    parameter_model: type[BaseModel],
+) -> dict[str, Any]:
+    data.seek(0)
+    return _load_typed_params(Path(filename), data, parameter_model)
+
+
 def load_model_params(
     model: BaseSimulationModel,
     uploaded_params: IO[bytes] | None = None,
     uploaded_name: str | None = None,
+    preset_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Load model parameters from upload or model defaults."""
-
     if uploaded_params is not None:
         if not uploaded_name:
             raise ValueError("Uploaded parameter files must include a filename.")
@@ -73,4 +81,7 @@ def load_model_params(
             )
         )
 
-    return flatten_dict(model.default_params())
+    defaults = model.default_params()
+    if preset_params is not None:
+        defaults = {**defaults, **preset_params}
+    return flatten_dict(defaults)
