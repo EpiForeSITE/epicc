@@ -45,7 +45,7 @@ def _decode_model_code(code: str) -> bytes:
             if not chunk:
                 break
             data.extend(chunk)
-        if len(data) >= _MAX_MODEL_BYTES and decompressor.read(1):
+        if len(data) == _MAX_MODEL_BYTES and decompressor.read(1):
             raise ValueError("Model code expands beyond 2 MiB")
     return bytes(data)
 
