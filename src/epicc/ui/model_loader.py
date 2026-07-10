@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import io
 import urllib.error
 import urllib.request
@@ -30,22 +31,15 @@ def _custom_model_key(name: str) -> str:
 
 
 def _decode_model_code(code: str) -> bytes:
-    """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
-    try:
-        import lzma
-    except ModuleNotFoundError as exc:
-        raise ValueError(
-            "Model codes are unavailable because this Python environment lacks LZMA support"
-        ) from exc
-
+    """Decode a base64-encoded, gzip-compressed YAML model code into raw YAML bytes."""
     stripped = code.strip()
     # base64 encodes 3 bytes → 4 chars; a _MAX_MODEL_BYTES payload needs ~4/3× that many chars
     if len(stripped) > _MAX_MODEL_BYTES * 4 // 3 + 64:
         raise ValueError("Model code is too large (max 2 MiB)")
     compressed = base64.b64decode(stripped, validate=True)
-    decompressor = lzma.LZMADecompressor()
-    data = decompressor.decompress(compressed, max_length=_MAX_MODEL_BYTES + 1)
-    if len(data) > _MAX_MODEL_BYTES or not decompressor.eof:
+    with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as decompressor:
+        data = decompressor.read(_MAX_MODEL_BYTES + 1)
+    if len(data) > _MAX_MODEL_BYTES:
         raise ValueError("Model code expands beyond 2 MiB")
     return data
 
