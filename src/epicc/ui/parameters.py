@@ -24,12 +24,6 @@ from epicc.ui.preset_keys import (
     _PRESET_STACK_KEY_PREFIX,
 )
 
-# Avoid circular import — import lazily where needed
-# from epicc.ui.export import render_parameter_export_modal
-
-# Avoid circular import — import lazily where needed
-# from epicc.ui.export import render_parameter_export_modal
-
 if TYPE_CHECKING:
     from epicc.model.schema import Parameter, ParameterGroup
 
@@ -265,21 +259,17 @@ def render_parameters_with_indent(
 ) -> None:
     rc = container if container is not None else st
     dirty_ids = _compute_dirty_ids(param_dict, model_id, param_specs)
-
-    if param_groups is not None:
-        specs = param_specs or {}
-        # Render params not mentioned in any group first (safety-net)
-        grouped_ids = _collect_group_param_ids(param_groups)
-        for param_id, default_value in param_dict.items():
-            if param_id not in grouped_ids:
-                widget_key = f"{model_id}:{param_id}"
-                spec = specs.get(param_id)
-                suffix = " [*]" if param_id in dirty_ids else ""
-                _render_param(param_id, default_value, widget_key, params, rc, spec, suffix)
-
-        # Render the group tree
-        for node in param_groups:
-            _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0, dirty_ids=dirty_ids)
+    groups = param_groups if param_groups is not None else []
+    specs = param_specs or {}
+    grouped_ids = _collect_group_param_ids(groups)
+    for param_id, default_value in param_dict.items():
+        if param_id not in grouped_ids:
+            widget_key = f"{model_id}:{param_id}"
+            spec = specs.get(param_id)
+            suffix = " [*]" if param_id in dirty_ids else ""
+            _render_param(param_id, default_value, widget_key, params, rc, spec, suffix)
+    for node in groups:
+        _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0, dirty_ids=dirty_ids)
 
 
 def render_validation_error(

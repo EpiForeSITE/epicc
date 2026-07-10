@@ -1061,9 +1061,16 @@ def render_model_editor(
     if not is_valid:
         _render_validation_errors(vresult)  # type: ignore[arg-type]
 
+    export_col: Any = st
+    if on_close is not None:
+        cancel_col, export_col = st.columns([1, 3])
+        if cancel_col.button("Cancel", use_container_width=True, key="editor_cancel"):
+            on_close()
+            st.rerun()
+
     try:
         yaml_bytes = _build_yaml_bytes(doc)
-        st.download_button(
+        export_col.download_button(
             label="Export YAML",
             data=yaml_bytes,
             file_name=f"{safe_title}.yaml",
