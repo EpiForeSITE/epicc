@@ -339,8 +339,7 @@ def create_model_class(
         """Return the model's default scenario list."""
         return list(model_def.resolved_scenarios())
 
-    def parameter_groups(self) -> list | None:
-        """Return the parameter group tree, or None if not defined."""
+    def parameter_groups(self) -> list:
         return model_def.groups
 
     def presets(self) -> list[Preset] | None:

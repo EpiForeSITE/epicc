@@ -56,9 +56,9 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
         return None
 
     @property
-    def parameter_groups(self) -> list | None:
-        """Optional parameter group tree for visual organization in the UI."""
-        return None
+    @abstractmethod
+    def parameter_groups(self) -> list:
+        ...
 
     @property
     def scenario_parameter_specs(self) -> dict[str, Parameter] | None:

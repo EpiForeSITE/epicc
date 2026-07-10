@@ -248,7 +248,6 @@ def render_parameters_with_indent(
 ) -> None:
     rc = container if container is not None else st
     specs = param_specs or {}
-    assert param_groups is not None, "All models must define parameter_groups"
     grouped_ids = _collect_group_param_ids(param_groups)
     for param_id, default_value in param_dict.items():
         if param_id not in grouped_ids:
