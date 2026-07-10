@@ -94,12 +94,17 @@ def _load_model_dialog() -> None:
         if load_url_btn and url:
             try:
                 with st.spinner("Fetching model..."):
+                    if not url.lower().startswith(("http://", "https://")):
+                        raise ValueError("Only http(s) URLs are supported")
                     req = urllib.request.Request(
                         url,
                         headers={"User-Agent": "epicc/0.1"},
                     )
                     with urllib.request.urlopen(req, timeout=15) as response:  # noqa: S310
-                        raw = response.read()
+                        max_bytes = 2 * 1024 * 1024  # 2 MiB safety cap
+                        raw = response.read(max_bytes + 1)
+                        if len(raw) > max_bytes:
+                            raise ValueError("Model file is too large (max 2 MiB)")
 
                 filename = _infer_filename_from_url(url)
                 model = load_model_from_stream(filename, io.BytesIO(raw))
