@@ -10,7 +10,7 @@
 
 ### Public Health Official / SLTT Staff
 
-1. As a public health official, I want to generate a report with a summary so I can share it directly with lawmakers, the general public, or other epis.
+1. As a public health official, I want to generate a report with a summary so I can share it directly with lawmakers, the general public, or other epidemiologists.
 2. As a public health official, I want to export that report as a PDF so I have a standard, print-ready format to distribute.
 3. As a public health official, I want to open a parameter file someone emailed me (YAML or XLSX) directly in Excel or a file previewer, without launching the app, just to see what's in it before deciding to load it.
 
