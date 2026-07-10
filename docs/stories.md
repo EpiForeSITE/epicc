@@ -8,7 +8,7 @@
 
 **Status:** All of these are implemented. Nested columnar data may be worked with in YAML or XLSX (it all goes through the same code). All relevant costs are already populated per default values or presets as needed, and checked against a dynamically generated Pydantic model at update time to help ensure correctness.
 
-### Public Health Official / STLT Staff
+### Public Health Official / SLTT Staff
 
 1. As a public health official, I want to generate a report with a summary so I can share it directly with lawmakers, the general public, or other epis.
 2. As a public health official, I want to export that report as a PDF so I have a standard, print-ready format to distribute.
