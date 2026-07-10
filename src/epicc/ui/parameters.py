@@ -68,6 +68,7 @@ def _render_spec_widget(
     widget_key: str,
     params: dict[str, Any] | None,
     container: Any,
+    label_suffix: str = "",
 ) -> None:
     """Render a typed widget for a parameter with a full schema spec.
 
@@ -75,7 +76,7 @@ def _render_spec_widget(
     ``params[param_id]``.  Pass ``None`` when the caller only needs
     Streamlit session-state (e.g. the scenario editor).
     """
-    display_label = spec.label
+    display_label = spec.label + label_suffix
     help_text = _build_help_text(spec)
 
     if spec.type == "boolean":
@@ -147,17 +148,18 @@ def _render_param(
     params: dict[str, Any],
     container: Any,
     spec: Parameter | None,
+    label_suffix: str = "",
 ) -> None:
     """Render a single parameter widget, with or without a spec."""
     if spec is not None:
         _render_spec_widget(
-            param_id, spec, default_value, widget_key, params, container
+            param_id, spec, default_value, widget_key, params, container, label_suffix
         )
     elif widget_key in st.session_state:
-        params[param_id] = container.text_input(param_id, key=widget_key)
+        params[param_id] = container.text_input(param_id + label_suffix, key=widget_key)
     else:
         params[param_id] = container.text_input(
-            param_id,
+            param_id + label_suffix,
             value=str(default_value) if default_value is not None else "",
             key=widget_key,
         )
@@ -182,8 +184,10 @@ def _render_group_node(
     model_id: str,
     container: Any,
     depth: int,
+    dirty_ids: set[str] | None = None,
 ) -> None:
     """Recursively render a group node or a leaf param ID."""
+    _dirty = dirty_ids or set()
     if isinstance(node, str):
         param_id = node
         if param_id not in param_defaults:
@@ -191,20 +195,23 @@ def _render_group_node(
         default_value = param_defaults[param_id]
         widget_key = f"{model_id}:{param_id}"
         spec = param_specs.get(param_id)
-        _render_param(param_id, default_value, widget_key, params, container, spec)
+        suffix = " [*]" if param_id in _dirty else ""
+        _render_param(param_id, default_value, widget_key, params, container, spec, suffix)
     else:
         # It's a ParameterGroup
+        group_dirty = bool(_dirty & _collect_group_param_ids([node]))
+        label = node.label + (" [*]" if group_dirty else "")
         if depth == 0:
             # Top-level groups become sidebar expanders
             child_container = container.expander(
-                node.label,
+                label,
                 expanded=False,
                 key=f"{model_id}:expander:{node.label}",
             )
         else:
             # Nested groups: Streamlit doesn't support nested expanders, so render
             # a bold markdown sub-header inside the current container instead
-            container.markdown(f"**{node.label}**")
+            container.markdown(f"**{label}**")
             child_container = container
 
         for child in node.children:
@@ -216,6 +223,7 @@ def _render_group_node(
                 model_id,
                 child_container,
                 depth + 1,
+                dirty_ids,
             )
 
 
@@ -284,6 +292,8 @@ def render_parameters_with_indent(
 ) -> None:
     """Render flattened parameter data as widgets inside container."""
     rc = container if container is not None else st
+    dirty_ids = _compute_dirty_ids(param_dict, model_id, param_specs)
+
     if param_groups is not None:
         specs = param_specs or {}
         # Render params not mentioned in any group first (safety-net)
@@ -292,14 +302,14 @@ def render_parameters_with_indent(
             if param_id not in grouped_ids:
                 widget_key = f"{model_id}:{param_id}"
                 spec = specs.get(param_id)
-                _render_param(param_id, default_value, widget_key, params, rc, spec)
+                suffix = " [*]" if param_id in dirty_ids else ""
+                _render_param(param_id, default_value, widget_key, params, rc, spec, suffix)
 
         # Render the group tree
         for node in param_groups:
-            _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0)
+            _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0, dirty_ids=dirty_ids)
         return
 
-    # --- Legacy flat / tab-indented rendering (no groups defined) ---
     items = list(param_dict.items())
     i = 0
     n = len(items)
@@ -312,12 +322,13 @@ def render_parameters_with_indent(
         if value is not None:
             widget_key = f"{model_id}:{label}"
             spec = param_specs.get(label) if param_specs else None
+            suffix = " [*]" if label in dirty_ids else ""
             if spec is not None:
-                _render_spec_widget(label, spec, value, widget_key, params, rc)
+                _render_spec_widget(label, spec, value, widget_key, params, rc, suffix)
             elif widget_key in st.session_state:
-                params[label] = rc.text_input(label, key=widget_key)
+                params[label] = rc.text_input(label + suffix, key=widget_key)
             else:
-                params[label] = rc.text_input(label, value=str(value), key=widget_key)
+                params[label] = rc.text_input(label + suffix, value=str(value), key=widget_key)
             i += 1
             continue
 
@@ -332,19 +343,23 @@ def render_parameters_with_indent(
                 children.append((subkey.strip(), subval))
             j += 1
 
-        expander = rc.expander(label, expanded=False, key=f"{model_id}:expander:{label}")
+        child_labels = {sublabel for sublabel, _ in children}
+        group_dirty = bool(child_labels & dirty_ids)
+        expander_label = label + (" [*]" if group_dirty else "")
+        expander = rc.expander(expander_label, expanded=False, key=f"{model_id}:expander:{label}")
         for sublabel, subval in children:
             widget_key = f"{model_id}:{label}:{sublabel}"
             spec = param_specs.get(sublabel) if param_specs else None
+            suffix = " [*]" if sublabel in dirty_ids else ""
             if spec is not None:
                 _render_spec_widget(
-                    sublabel, spec, subval, widget_key, params, expander
+                    sublabel, spec, subval, widget_key, params, expander, suffix
                 )
             elif widget_key in st.session_state:
-                params[sublabel] = expander.text_input(sublabel, key=widget_key)
+                params[sublabel] = expander.text_input(sublabel + suffix, key=widget_key)
             else:
                 params[sublabel] = expander.text_input(
-                    sublabel, value=str(subval), key=widget_key
+                    sublabel + suffix, value=str(subval), key=widget_key
                 )
 
         i = j
@@ -607,6 +622,30 @@ def _compute_dirty_state(
     return False
 
 
+def _compute_dirty_ids(
+    model_defaults: dict[str, Any],
+    model_id: str,
+    param_specs: dict[str, Parameter] | None,
+) -> set[str]:
+    """Return the set of param IDs whose widget value differs from the model default."""
+    dirty: set[str] = set()
+    specs = param_specs or {}
+    for key, default_val in model_defaults.items():
+        widget_key = f"{model_id}:{key}"
+        if widget_key not in st.session_state:
+            continue
+        current = st.session_state[widget_key]
+        spec = specs.get(key)
+        native_default = (
+            _native_value(default_val, spec)
+            if spec is not None
+            else (str(default_val) if default_val is not None else "")
+        )
+        if current != native_default:
+            dirty.add(key)
+    return dirty
+
+
 def _render_preset_controls_inline(
     model: BaseSimulationModel,
     model_key: str,
@@ -652,7 +691,6 @@ def _render_preset_controls_inline(
     with ct.container():
         st.caption("Presets")
 
-        # --- Add preset selectbox ---
         available = [p for p in all_presets if p.id not in active_stack]
         if available:
             add_ctr: int = st.session_state.get(add_ctr_key, 0)
@@ -673,7 +711,6 @@ def _render_preset_controls_inline(
                 del st.session_state[add_sel_key]
                 st.rerun()
 
-        # --- File uploader (load a preset from a saved file) ---
         uploaded = st.file_uploader(
             "Add preset from file",
             type=sorted(VALID_PARAMETER_SUFFIXES),
@@ -707,7 +744,6 @@ def _render_preset_controls_inline(
                     st.session_state[stack_key] = ["_file_"] + active_stack
                     st.rerun()
 
-        # --- Active stack list ---
         if active_stack:
             st.caption("Preset stack")
             for i, pid in enumerate(active_stack):
@@ -921,7 +957,6 @@ def render_sidebar_parameters(
     """
     ct = container if container is not None else st
 
-    # --- Inline preset section (above parameters) ---
     active_stack, file_preset = _render_preset_controls_inline(model, model_key, ct)
 
     file_preset_data: dict[str, Any] | None = st.session_state.get(

@@ -1,10 +1,9 @@
-from typing import Any
-
 import streamlit as st
 from pydantic import ValidationError
 
 from epicc.model.base import BaseSimulationModel
 from epicc.model.models import get_all_models
+from epicc.ui.editor import render_model_editor
 from epicc.ui.export import (
     render_parameter_export_modal,
     render_pdf_export_button,
@@ -34,7 +33,9 @@ initialize_state()
 all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 
-hdr_title, hdr_model = st.columns([3, 3])
+_EDITOR_MODE_KEY = "epicc_editor_mode"
+
+hdr_title, hdr_model, hdr_editor = st.columns([3, 3, 1])
 hdr_title.title("EPICC Cost Calculator")
 selected_label: str | None = hdr_model.selectbox(
     "Model",
@@ -43,6 +44,20 @@ selected_label: str | None = hdr_model.selectbox(
     placeholder="Select a model...",
     label_visibility="collapsed",
 )
+
+if selected_label is not None:
+    in_editor = bool(st.session_state.get(_EDITOR_MODE_KEY))
+    btn_label = "Abort to Calculator" if in_editor else "Open Model Editor"
+    if hdr_editor.button(
+        btn_label,
+        use_container_width=True,
+        key="open_editor_btn",
+    ):
+        if in_editor:
+            st.session_state.pop(_EDITOR_MODE_KEY, None)
+        else:
+            st.session_state[_EDITOR_MODE_KEY] = True
+        st.rerun()
 
 st.divider()
 
@@ -90,6 +105,21 @@ left, run the simulation, and see the results on the right. Happy exploring!
 
 active_model = model_registry[selected_label]
 assert selected_label is not None  # Type narrowing for mypy
+
+if st.session_state.get(_EDITOR_MODE_KEY):
+    model_def = active_model.get_model_definition()
+    initial_doc = model_def.model_dump(mode="json", by_alias=True)
+
+    def _close_editor() -> None:
+        st.session_state.pop(_EDITOR_MODE_KEY, None)
+
+    render_model_editor(
+        initial_doc=initial_doc,
+        source_label=selected_label,
+        on_close=_close_editor,
+    )
+    st.stop()
+
 params = sync_active_model(selected_label)
 
 param_col, result_col = st.columns([2, 3], gap="large")
