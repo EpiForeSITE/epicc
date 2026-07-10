@@ -6,7 +6,7 @@
 4. As an epidemiologist who is a heavy spreadsheet user, I want to author or edit model parameters in XLSX instead of hand-editing a YAML file, so the tool doesn't require technical file-format knowledge.
 5. As an epidemiologist, I want to download a documented parameter template (YAML or XLSX), specialize it with my own values, and load it back into the app.
 
-**Status:** All of these are implemented. Nested columnar data may be worked with in YAML or XLSX (it all goes through the same code). All relavent costs are already populated per default values or presets as needed, and checked against a dynamically generated Pydantic model at update time to help ensure correctness.
+**Status:** All of these are implemented. Nested columnar data may be worked with in YAML or XLSX (it all goes through the same code). All relevant costs are already populated per default values or presets as needed, and checked against a dynamically generated Pydantic model at update time to help ensure correctness.
 
 ### Public Health Official / STLT Staff
 
