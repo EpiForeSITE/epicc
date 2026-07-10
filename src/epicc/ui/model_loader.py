@@ -37,11 +37,13 @@ def _decode_model_code(code: str) -> bytes:
     if len(stripped) > _MAX_MODEL_BYTES * 4 // 3 + 64:
         raise ValueError("Model code is too large (max 2 MiB)")
     compressed = base64.b64decode(stripped, validate=True)
+    data = bytearray()
     with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as decompressor:
-        data = decompressor.read(_MAX_MODEL_BYTES + 1)
-    if len(data) > _MAX_MODEL_BYTES:
-        raise ValueError("Model code expands beyond 2 MiB")
-    return data
+        while chunk := decompressor.read(min(64 * 1024, _MAX_MODEL_BYTES + 1 - len(data))):
+            data.extend(chunk)
+            if len(data) > _MAX_MODEL_BYTES:
+                raise ValueError("Model code expands beyond 2 MiB")
+    return bytes(data)
 
 
 @st.dialog("Load Custom Model", width="large")
