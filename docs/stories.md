@@ -22,7 +22,7 @@
 2. As any user, I want to reload a previously saved or shared parameter file back into the app.
 3. As any user, I want to read the assumptions behind the model (a longer description, not just numbers) so I can justify the figures to others.
 4. As any user, I want my in-progress configuration to persist if I accidentally close or refresh the app, so I don't lose my work.
-	1. *Unsure the best way to do this.*
+   - *Unsure the best way to do this.*
 5. As any user authoring my own parameter file, I want clear validation error messages when the file is malformed or missing required fields, so I can fix it myself.
 
 **Status:** Yes, exporting/importing is a common feature throughout the cost calculator. Model parameters may include help text and references to aide in future understanding and documentation. All is checked against a dynamically generated Pydantic model at update time to help ensure correctness.
