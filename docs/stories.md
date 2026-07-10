@@ -14,7 +14,7 @@
 2. As a public health official, I want to export that report as a PDF so I have a standard, print-ready format to distribute.
 3. As a public health official, I want to open a parameter file someone emailed me (YAML or XLSX) directly in Excel or a file previewer, without launching the app, just to see what's in it before deciding to load it.
 
-**Status:** Report generation is not yet complete (at least as far as DOCX is concerned). Reports may be emitted as PDF, but this is currently shoddy. EPICC does not need to inclde functionality for looking at the contents of a file, as this is handled natively by the computer.
+**Status:** Report generation is not yet complete (at least as far as DOCX is concerned). Reports can be exported as PDF, but the output quality and formatting are still limited. EPICC does not need to add functionality for previewing parameter files, since this is handled by standard OS and spreadsheet tooling.
 
 ### Any User
 
