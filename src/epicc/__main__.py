@@ -111,10 +111,8 @@ params = sync_active_model(selected_label)
 param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
-    params, scenario_overrides, model_defaults_flat, has_input_errors = (
-        render_sidebar_parameters(
-            active_model, selected_label, params, container=param_col
-        )
+    params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = render_sidebar_parameters(
+        active_model, selected_label, params, container=param_col,
     )
 
     typed_params = None
@@ -125,19 +123,27 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    # Reset and Save Parameters buttons side by side
-    button_col1, button_col2 = st.columns(2)
+    btn_col1, btn_col2 = st.columns(2)
 
-    # Reset Parameters button
+    with btn_col1:
+        if typed_params is not None:
+            render_parameter_export_modal(
+                active_model.human_name(),
+                typed_params.model_dump(),
+                label="Save Changes as Preset",
+                disabled=not is_dirty,
+                pydantic_model=type(typed_params),
+                container=btn_col1,
+            )
+        else:
+            st.button("Save Changes as Preset", disabled=True, use_container_width=True)
+
     def _handle_reset() -> None:
-        model_label = cast(str, selected_label)  # Safe because we checked above
+        model_label = cast(str, selected_label)  # Safe: checked above
         reset_parameters_to_defaults(
-            model_defaults_flat,
-            params,
-            model_label,
+            model_defaults_flat, params, model_label,
             param_specs=active_model.parameter_specs,
         )
-        # Reset scenarios back to model defaults
         default_scenarios = active_model.default_scenarios
         if default_scenarios:
             reset_scenario_state(
@@ -146,25 +152,12 @@ with param_col:
                 active_model.scenario_parameter_specs or {},
             )
 
-    with button_col1:
-        st.button("Reset Parameters", on_click=_handle_reset, width="stretch")
-
-    # Save Parameters button (only enabled when parameters are valid)
-    with button_col2:
-        if typed_params is not None:
-            render_parameter_export_modal(
-                active_model.human_name(),
-                typed_params.model_dump(),
-                pydantic_model=type(typed_params),
-                container=button_col2,
-            )
-        else:
-            st.button(
-                "Save Parameters",
-                disabled=True,
-                width="stretch",
-                help="Fix parameter errors first",
-            )
+    btn_col2.button(
+        "Reset to Preset",
+        on_click=_handle_reset,
+        use_container_width=True,
+        disabled=not is_dirty,
+    )
 
     st.divider()
     run_clicked = st.button(

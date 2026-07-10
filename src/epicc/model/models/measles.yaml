@@ -172,6 +172,28 @@ scenarios:
     vars:
       n_cases: 803
 
+presets:
+  - id: school_daycare
+    label: "School or daycare setting"
+    params:
+      contacts_per_case: 89
+      vaccination_rate: 0.95
+      proportion_hospitalized: 0.18
+  - id: healthcare_facility
+    label: "Healthcare facility exposure"
+    params:
+      contacts_per_case: 200
+      vaccination_rate: 0.90
+      proportion_hospitalized: 0.35
+  - id: low_resource
+    label: "Low-resource setting"
+    params:
+      contacts_per_case: 110
+      vaccination_rate: 0.68
+      cost_measles_hospitalization: 2400
+      hourly_wage_worker: 4.50
+      hourly_wage_contract_tracer: 6.00
+
 figures: []
 
 report:
@@ -247,4 +269,3 @@ report:
         value: "eq_tracing"
       - label: "Total"
         value: "eq_total"
-

@@ -7,6 +7,8 @@ import streamlit as st
 if TYPE_CHECKING:
     from epicc.model.base import BaseSimulationModel
 
+from epicc.ui.preset_keys import clear_preset_state
+
 _RESULTS_KEY = "results_payload"
 _PRINT_REQUESTED_KEY = "print_requested"
 _PRINT_TOKEN_KEY = "print_trigger_token"
@@ -37,6 +39,7 @@ def sync_active_model(model_key: str) -> dict[str, Any]:
         clear_results()
         st.session_state.pop(_UPLOAD_HASH_CACHE_KEY, None)
         st.session_state.pop(_ACTIVE_PARAM_IDENTITY_KEY, None)
+        clear_preset_state(model_key)
 
     st.session_state.setdefault(_PARAMS_KEY, {})
     return st.session_state[_PARAMS_KEY]
