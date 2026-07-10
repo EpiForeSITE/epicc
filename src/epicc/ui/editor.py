@@ -1,10 +1,3 @@
-"""Graphical model editor for building and modifying EPICC model YAML files.
-
-The editor maintains a plain-dict representation of the model in Streamlit session
-state, mirroring the YAML document structure exactly so it can be validated via
-``opaque_to_typed(doc, Model)`` and serialised via ``YAMLFormat.write(doc)``
-without any intermediate transformation.
-"""
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -18,7 +18,7 @@ from epicc.model.factory import (
     create_model_instance,
 )
 from epicc.model.models import get_all_models
-from epicc.model.parameters import flatten_dict, load_model_params
+from epicc.model.parameters import load_model_params
 from epicc.model.schema import Model
 
 __all__ = [
@@ -31,7 +31,6 @@ __all__ = [
     "Model",
     # Parameters
     "load_model_params",
-    "flatten_dict",
     # Evaluation (advanced use)
     "EquationEvaluator",
     # Validation (for testing/debugging)

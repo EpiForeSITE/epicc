@@ -17,16 +17,21 @@ from epicc.ui.state import (
     reset_params,
     set_active_param_identity,
 )
+from epicc.ui.preset_keys import (
+    _FILE_PRESET_KEY_PREFIX,
+    _PRESET_INLINE_ADD_CTR_KEY_PREFIX,
+    _PRESET_INLINE_ADD_SEL_KEY_PREFIX,
+    _PRESET_STACK_KEY_PREFIX,
+)
+
+# Avoid circular import — import lazily where needed
+# from epicc.ui.export import render_parameter_export_modal
 
 # Avoid circular import — import lazily where needed
 # from epicc.ui.export import render_parameter_export_modal
 
 if TYPE_CHECKING:
     from epicc.model.schema import Parameter, ParameterGroup
-
-
-def item_level(key: str) -> int:
-    return len(key) - len(key.lstrip("\t"))
 
 
 def _build_help_text(spec: Parameter) -> str | None:
@@ -245,52 +250,19 @@ def reset_parameters_to_defaults(
     model_id: str,
     param_specs: dict[str, Parameter] | None = None,
 ) -> None:
-    """Reset session-state widgets and params to defaults."""
-    items = list(param_dict.items())
-    i = 0
-    n = len(items)
-
-    while i < n:
-        key, value = items[i]
-        level = item_level(key)
-        label = key.strip()
-
-        if value is not None:
-            spec = param_specs.get(label) if param_specs else None
-            _set_param_widget_state(f"{model_id}:{label}", label, value, params, spec)
-            i += 1
-            continue
-
-        j = i + 1
-        while j < n:
-            subkey, subval = items[j]
-            sublevel = item_level(subkey)
-            if sublevel <= level:
-                break
-            if sublevel == level + 1 and subval is not None:
-                sublabel = subkey.strip()
-                spec = param_specs.get(sublabel) if param_specs else None
-                _set_param_widget_state(
-                    f"{model_id}:{label}:{sublabel}",
-                    sublabel,
-                    subval,
-                    params,
-                    spec,
-                )
-            j += 1
-
-        i = j
+    for param_id, value in param_dict.items():
+        spec = param_specs.get(param_id) if param_specs else None
+        _set_param_widget_state(f"{model_id}:{param_id}", param_id, value, params, spec)
 
 
 def render_parameters_with_indent(
     param_dict: dict[str, Any],
     params: dict[str, Any],
     model_id: str,
+    param_groups: list,
     param_specs: dict[str, Parameter] | None = None,
-    param_groups: list | None = None,
     container: Any = None,
 ) -> None:
-    """Render flattened parameter data as widgets inside container."""
     rc = container if container is not None else st
     dirty_ids = _compute_dirty_ids(param_dict, model_id, param_specs)
 
@@ -308,61 +280,6 @@ def render_parameters_with_indent(
         # Render the group tree
         for node in param_groups:
             _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0, dirty_ids=dirty_ids)
-        return
-
-    items = list(param_dict.items())
-    i = 0
-    n = len(items)
-
-    while i < n:
-        key, value = items[i]
-        level = item_level(key)
-        label = key.strip()
-
-        if value is not None:
-            widget_key = f"{model_id}:{label}"
-            spec = param_specs.get(label) if param_specs else None
-            suffix = " [*]" if label in dirty_ids else ""
-            if spec is not None:
-                _render_spec_widget(label, spec, value, widget_key, params, rc, suffix)
-            elif widget_key in st.session_state:
-                params[label] = rc.text_input(label + suffix, key=widget_key)
-            else:
-                params[label] = rc.text_input(label + suffix, value=str(value), key=widget_key)
-            i += 1
-            continue
-
-        children: list[tuple[str, Any]] = []
-        j = i + 1
-        while j < n:
-            subkey, subval = items[j]
-            sublevel = item_level(subkey)
-            if sublevel <= level:
-                break
-            if sublevel == level + 1 and subval is not None:
-                children.append((subkey.strip(), subval))
-            j += 1
-
-        child_labels = {sublabel for sublabel, _ in children}
-        group_dirty = bool(child_labels & dirty_ids)
-        expander_label = label + (" [*]" if group_dirty else "")
-        expander = rc.expander(expander_label, expanded=False, key=f"{model_id}:expander:{label}")
-        for sublabel, subval in children:
-            widget_key = f"{model_id}:{label}:{sublabel}"
-            spec = param_specs.get(sublabel) if param_specs else None
-            suffix = " [*]" if sublabel in dirty_ids else ""
-            if spec is not None:
-                _render_spec_widget(
-                    sublabel, spec, subval, widget_key, params, expander, suffix
-                )
-            elif widget_key in st.session_state:
-                params[sublabel] = expander.text_input(sublabel + suffix, key=widget_key)
-            else:
-                params[sublabel] = expander.text_input(
-                    sublabel + suffix, value=str(subval), key=widget_key
-                )
-
-        i = j
 
 
 def render_validation_error(
@@ -401,43 +318,12 @@ def render_validation_error(
         )
 
 
-def _unflatten_indented_params(flat_params: dict[str, Any]) -> dict[str, Any]:
-    root: dict[str, Any] = {}
-    stack: list[dict[str, Any]] = [root]
-    for raw_key, value in flat_params.items():
-        level = item_level(raw_key)
-        label = raw_key.strip()
-        while len(stack) > level + 1:
-            stack.pop()
-        parent = stack[-1]
-        if value is None:
-            node: dict[str, Any] = {}
-            parent[label] = node
-            stack.append(node)
-        else:
-            parent[label] = value
-    return root
-
-
-def _merge_sidebar_values(
-    nested_defaults: dict[str, Any], params: dict[str, Any]
-) -> dict[str, Any]:
-    merged: dict[str, Any] = {}
-    for key, value in nested_defaults.items():
-        if isinstance(value, dict):
-            merged[key] = _merge_sidebar_values(value, params)
-        else:
-            merged[key] = params.get(key, value)
-    return merged
-
-
 def build_typed_params(
     model: BaseSimulationModel,
     model_defaults_flat: dict[str, Any],
     params: dict[str, Any],
 ) -> BaseModel:
-    nested = _unflatten_indented_params(model_defaults_flat)
-    payload = _merge_sidebar_values(nested, params)
+    payload = {key: params.get(key, value) for key, value in model_defaults_flat.items()}
     return model.parameter_model().model_validate(payload)
 
 
@@ -646,6 +532,25 @@ def _compute_dirty_ids(
     return dirty
 
 
+def _compute_scenario_dirty_state(
+    model_id: str,
+    defaults: list[Scenario],
+    specs: dict[str, Parameter],
+) -> bool:
+    """Return True if scenario count, labels, or vars differ from defaults."""
+    count = st.session_state.get(_scenario_count_key(model_id), 0)
+    if count != len(defaults):
+        return True
+    for i, scen in enumerate(defaults):
+        if st.session_state.get(_scenario_label_key(model_id, i)) != scen.label:
+            return True
+        vars_dict = scen.vars.model_dump()
+        for var_name, spec in specs.items():
+            default_val = _native_value(vars_dict.get(var_name, spec.default), spec)
+            if st.session_state.get(_scenario_var_key(model_id, i, var_name)) != default_val:
+                return True
+    return False
+
 def _render_preset_controls_inline(
     model: BaseSimulationModel,
     model_key: str,
@@ -656,9 +561,9 @@ def _render_preset_controls_inline(
     Returns ``(active_stack, file_preset)`` reflecting the current state.
     All mutations write directly to session state and trigger ``st.rerun()``.
     """
-    stack_key = f"_preset_stack_{model_key}"
-    file_preset_key = f"_file_preset_{model_key}"
-    add_ctr_key = f"_padd_inline_ctr_{model_key}"
+    stack_key = _PRESET_STACK_KEY_PREFIX + model_key
+    file_preset_key = _FILE_PRESET_KEY_PREFIX + model_key
+    add_ctr_key = _PRESET_INLINE_ADD_CTR_KEY_PREFIX + model_key
 
     model_presets: list[Preset] = model.presets or []
 
@@ -691,10 +596,11 @@ def _render_preset_controls_inline(
     with ct.container():
         st.caption("Presets")
 
+        # --- Add preset selectbox ---
         available = [p for p in all_presets if p.id not in active_stack]
         if available:
             add_ctr: int = st.session_state.get(add_ctr_key, 0)
-            add_sel_key = f"_padd_inline_{model_key}_{add_ctr}"
+            add_sel_key = f"{_PRESET_INLINE_ADD_SEL_KEY_PREFIX}{model_key}_{add_ctr}"
 
             chosen = st.selectbox(
                 "Add preset",
@@ -711,6 +617,7 @@ def _render_preset_controls_inline(
                 del st.session_state[add_sel_key]
                 st.rerun()
 
+        # --- File uploader (load a preset from a saved file) ---
         uploaded = st.file_uploader(
             "Add preset from file",
             type=sorted(VALID_PARAMETER_SUFFIXES),
@@ -744,6 +651,7 @@ def _render_preset_controls_inline(
                     st.session_state[stack_key] = ["_file_"] + active_stack
                     st.rerun()
 
+        # --- Active stack list ---
         if active_stack:
             st.caption("Preset stack")
             for i, pid in enumerate(active_stack):
@@ -779,170 +687,6 @@ def _render_preset_controls_inline(
     return active_stack, file_preset
 
 
-@st.dialog("Configure presets")
-def _preset_stack_dialog(
-    model_presets: list[Preset],
-    current_stack: list[str],
-    model_key: str,
-    parameter_model: type[BaseModel],
-) -> None:
-    working_key = f"_modal_wstack_{model_key}"
-    add_ctr_key = f"_padd_ctr_{model_key}"
-    op_key = f"_pop_{model_key}"
-    file_preset_key = f"_file_preset_{model_key}"
-
-    if working_key not in st.session_state:
-        st.session_state[working_key] = list(current_stack)
-    working: list[str] = st.session_state[working_key]
-
-    # Consume pending add before rendering so the selectbox resets.
-    # A counter suffix is used as the selectbox key so that after each add
-    # the widget gets a new key and is truly remounted at index=0.  Deleting
-    # the old key alone is not sufficient: Streamlit can replay the last
-    # committed value when the same key re-appears.
-    add_ctr: int = st.session_state.get(add_ctr_key, 0)
-    add_select_key = f"_padd_sel_{model_key}_{add_ctr}"
-    pending_add: str | None = st.session_state.get(add_select_key)
-    if pending_add is not None:
-        if pending_add not in working:
-            working.append(pending_add)
-        add_ctr += 1
-        st.session_state[add_ctr_key] = add_ctr
-        del st.session_state[add_select_key]
-        add_select_key = f"_padd_sel_{model_key}_{add_ctr}"
-
-    # Consume pending reorder/remove op before rendering so the loop sees
-    # the updated list and never visits the same pid twice.
-    pending_op: dict[str, Any] | None = st.session_state.pop(op_key, None)
-    if pending_op is not None:
-        op_type: str = pending_op["type"]
-        if op_type == "swap_up":
-            ix: int = pending_op["i"]
-            if 0 < ix < len(working):
-                working[ix], working[ix - 1] = working[ix - 1], working[ix]
-        elif op_type == "swap_down":
-            ix = pending_op["i"]
-            if 0 <= ix < len(working) - 1:
-                working[ix], working[ix + 1] = working[ix + 1], working[ix]
-        elif op_type == "remove":
-            target: str = pending_op["pid"]
-            if target in working:
-                working.remove(target)
-
-    # File uploader
-    uploaded = st.file_uploader(
-        "Load from file",
-        type=sorted(VALID_PARAMETER_SUFFIXES),
-        key=f"_file_up_{model_key}",
-    )
-    if uploaded is not None:
-        new_hash = hashlib.sha1(uploaded.getvalue()).hexdigest()
-        existing = st.session_state.get(file_preset_key)
-        if existing is None or existing["hash"] != new_hash:
-            try:
-                parsed = parse_preset_from_file(
-                    uploaded.name, uploaded, parameter_model
-                )
-                st.session_state[file_preset_key] = {
-                    "label": uploaded.name,
-                    "params": parsed,
-                    "hash": new_hash,
-                }
-            except (ValidationError, ValueError) as exc:
-                st.error(f"Could not read file: {exc}")
-
-    file_preset_data: dict[str, Any] | None = st.session_state.get(file_preset_key)
-    file_preset: Preset | None = (
-        Preset(
-            id="_file_",
-            label=file_preset_data["label"],
-            params=file_preset_data["params"],
-        )
-        if file_preset_data is not None
-        else None
-    )
-    if file_preset is not None:
-        col_info, col_direct = st.columns([3, 2])
-        col_info.caption(f"Loaded: {file_preset.label}")
-        if col_direct.button("Apply directly", key=f"_file_direct_{model_key}"):
-            st.session_state[f"_preset_stack_{model_key}"] = ["_file_"]
-            st.session_state.pop(working_key, None)
-            st.session_state.pop(add_ctr_key, None)
-            st.session_state.pop(add_select_key, None)
-            st.session_state.pop(op_key, None)
-            st.rerun()
-
-    st.divider()
-
-    # Build full preset list: file preset (if any) + built-in model presets
-    all_presets: list[Preset] = (
-        [file_preset] if file_preset is not None else []
-    ) + list(model_presets)
-    preset_by_id: dict[str, Preset] = {p.id: p for p in all_presets}
-
-    available = [p for p in all_presets if p.id not in working]
-    if available:
-        st.selectbox(
-            "Add to stack",
-            options=[None] + [p.id for p in available],
-            format_func=lambda x: "Select a preset..."
-            if x is None
-            else preset_by_id[x].label,
-            index=0,
-            key=add_select_key,
-        )
-
-    if working:
-        if available:
-            st.divider()
-        st.caption("Top = highest priority")
-        for i, pid in enumerate(working):
-            preset = preset_by_id.get(pid)
-            if preset is None:
-                continue
-            col_label, col_up, col_down, col_rm = st.columns([4, 1, 1, 1])
-            col_label.write(preset.label)
-            col_up.button(
-                "\u2191",
-                key=f"_pup_{model_key}_{pid}",
-                disabled=(i == 0),
-                on_click=lambda _i=i: st.session_state.__setitem__(
-                    op_key, {"type": "swap_up", "i": _i}
-                ),
-            )
-            col_down.button(
-                "\u2193",
-                key=f"_pdn_{model_key}_{pid}",
-                disabled=(i == len(working) - 1),
-                on_click=lambda _i=i: st.session_state.__setitem__(
-                    op_key, {"type": "swap_down", "i": _i}
-                ),
-            )
-            col_rm.button(
-                "\u00d7",
-                key=f"_prm_{model_key}_{pid}",
-                on_click=lambda _pid=pid: st.session_state.__setitem__(
-                    op_key, {"type": "remove", "pid": _pid}
-                ),
-            )
-
-    st.divider()
-    col_apply, col_clear = st.columns(2)
-    if col_apply.button("Apply", type="primary", use_container_width=True):
-        st.session_state[f"_preset_stack_{model_key}"] = list(working)
-        st.session_state.pop(working_key, None)
-        st.session_state.pop(add_ctr_key, None)
-        st.session_state.pop(add_select_key, None)
-        st.session_state.pop(op_key, None)
-        st.rerun()
-    if col_clear.button("Clear all", use_container_width=True):
-        st.session_state[f"_preset_stack_{model_key}"] = []
-        st.session_state.pop(working_key, None)
-        st.session_state.pop(add_ctr_key, None)
-        st.session_state.pop(add_select_key, None)
-        st.session_state.pop(op_key, None)
-        st.rerun()
-
 
 def render_sidebar_parameters(
     model: BaseSimulationModel,
@@ -957,10 +701,11 @@ def render_sidebar_parameters(
     """
     ct = container if container is not None else st
 
+    # --- Inline preset section (above parameters) ---
     active_stack, file_preset = _render_preset_controls_inline(model, model_key, ct)
 
     file_preset_data: dict[str, Any] | None = st.session_state.get(
-        f"_file_preset_{model_key}"
+        _FILE_PRESET_KEY_PREFIX + model_key
     )
     all_presets: list[Preset] = (
         [file_preset] if file_preset is not None else []
@@ -1038,4 +783,9 @@ def render_sidebar_parameters(
     )
 
     is_dirty = _compute_dirty_state(model_defaults, model_key, model.parameter_specs)
+    default_scenarios = model.default_scenarios
+    if not is_dirty and default_scenarios and model.scenario_parameter_specs:
+        is_dirty = _compute_scenario_dirty_state(
+            model_key, default_scenarios, model.scenario_parameter_specs
+        )
     return params, scenario_overrides, model_defaults, False, is_dirty

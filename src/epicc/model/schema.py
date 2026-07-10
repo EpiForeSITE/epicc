@@ -147,7 +147,7 @@ class Model(BaseModel):
     parameters: dict[str, Parameter]
     equations: dict[str, Equation]
 
-    groups: list[str | ParameterGroup] | None = None
+    groups: list[str | ParameterGroup]
 
     scenarios: list[Scenario]
     report: list[ReportBlock]
