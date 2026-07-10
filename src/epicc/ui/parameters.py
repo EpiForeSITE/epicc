@@ -249,7 +249,7 @@ def render_parameters_with_indent(
     params: dict[str, Any],
     model_id: str,
     param_specs: dict[str, Parameter] | None = None,
-    param_groups: list | None = None,
+    param_groups: list,
     container: Any = None,
 ) -> None:
     rc = container if container is not None else st
