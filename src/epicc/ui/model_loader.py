@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import io
-import lzma
 import urllib.error
 import urllib.request
 from typing import Any
@@ -32,6 +31,13 @@ def _custom_model_key(name: str) -> str:
 
 def _decode_model_code(code: str) -> bytes:
     """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
+    try:
+        import lzma
+    except ModuleNotFoundError as exc:
+        raise ValueError(
+            "Model codes are unavailable because this Python environment lacks LZMA support"
+        ) from exc
+
     stripped = code.strip()
     # base64 encodes 3 bytes → 4 chars; a _MAX_MODEL_BYTES payload needs ~4/3× that many chars
     if len(stripped) > _MAX_MODEL_BYTES * 4 // 3 + 64:
