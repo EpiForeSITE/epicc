@@ -13,6 +13,7 @@ from epicc.model.models import load_model_from_stream
 from epicc.ui.state import add_custom_model
 
 _PENDING_MODEL_KEY = "_pending_model_selection"
+_MAX_MODEL_BYTES = 2 * 1024 * 1024  # 2 MiB cap applied to all model inputs
 
 
 def _infer_filename_from_url(url: str) -> str:
@@ -31,11 +32,14 @@ def _custom_model_key(name: str) -> str:
 
 def _decode_model_code(code: str) -> bytes:
     """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
-    _MAX_OUTPUT = 2 * 1024 * 1024  # 2 MiB safety cap against decompression bombs
-    compressed = base64.b64decode(code.strip())
+    stripped = code.strip()
+    # base64 encodes 3 bytes → 4 chars; a _MAX_MODEL_BYTES payload needs ~4/3× that many chars
+    if len(stripped) > _MAX_MODEL_BYTES * 4 // 3 + 64:
+        raise ValueError("Model code is too large (max 2 MiB)")
+    compressed = base64.b64decode(stripped, validate=True)
     decompressor = lzma.LZMADecompressor()
-    data = decompressor.decompress(compressed, max_length=_MAX_OUTPUT + 1)
-    if len(data) > _MAX_OUTPUT or not decompressor.eof:
+    data = decompressor.decompress(compressed, max_length=_MAX_MODEL_BYTES + 1)
+    if len(data) > _MAX_MODEL_BYTES or not decompressor.eof:
         raise ValueError("Model code expands beyond 2 MiB")
     return data
 
@@ -68,8 +72,11 @@ def _load_model_dialog() -> None:
         if load_file_btn and uploaded is not None:
             try:
                 with st.spinner("Parsing model..."):
+                    raw = uploaded.read(_MAX_MODEL_BYTES + 1)
+                    if len(raw) > _MAX_MODEL_BYTES:
+                        raise ValueError("Model file is too large (max 2 MiB)")
                     model = load_model_from_stream(
-                        uploaded.name, io.BytesIO(uploaded.read())
+                        uploaded.name, io.BytesIO(raw)
                     )
                 key = add_custom_model(_custom_model_key(model.human_name()), model)
                 st.session_state[_PENDING_MODEL_KEY] = key
@@ -101,9 +108,8 @@ def _load_model_dialog() -> None:
                         headers={"User-Agent": "epicc/0.1"},
                     )
                     with urllib.request.urlopen(req, timeout=15) as response:  # noqa: S310
-                        max_bytes = 2 * 1024 * 1024  # 2 MiB safety cap
-                        raw = response.read(max_bytes + 1)
-                        if len(raw) > max_bytes:
+                        raw = response.read(_MAX_MODEL_BYTES + 1)
+                        if len(raw) > _MAX_MODEL_BYTES:
                             raise ValueError("Model file is too large (max 2 MiB)")
 
                 filename = _infer_filename_from_url(url)
