@@ -10,6 +10,10 @@ from epicc.ui.export import (
     render_pdf_export_button,
     trigger_print_if_requested,
 )
+from epicc.ui.model_loader import (
+    consume_pending_model_selection,
+    render_load_model_button,
+)
 from epicc.ui.parameters import (
     build_typed_params,
     render_sidebar_parameters,
@@ -19,8 +23,9 @@ from epicc.ui.parameters import (
 )
 from epicc.ui.report import get_report_renderer
 from epicc.ui.state import (
-    has_results,
+    get_custom_models,
     get_run_output,
+    has_results,
     initialize_state,
     set_run_output,
     sync_active_model,
@@ -33,16 +38,27 @@ initialize_state()
 
 all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
+model_registry.update(get_custom_models())
 
-hdr_title, hdr_model = st.columns([3, 3])
+_MODEL_SELECT_KEY = "model_selector"
+pending_label = consume_pending_model_selection()
+if pending_label is not None and pending_label in model_registry:
+    st.session_state[_MODEL_SELECT_KEY] = pending_label
+
+hdr_title, hdr_right = st.columns([3, 3])
 hdr_title.title("EPICC Cost Calculator")
-selected_label: str | None = hdr_model.selectbox(
-    "Model",
-    list(model_registry),
-    index=None,
-    placeholder="Select a model...",
-    label_visibility="collapsed",
-)
+
+with hdr_right:
+    col_model, col_load = st.columns([5, 1], vertical_alignment="center")
+    selected_label: str | None = col_model.selectbox(
+        "Model",
+        list(model_registry),
+        key=_MODEL_SELECT_KEY,
+        index=None,
+        placeholder="Select a model...",
+        label_visibility="collapsed",
+    )
+    render_load_model_button(container=col_load)
 
 st.divider()
 
@@ -95,8 +111,10 @@ params = sync_active_model(selected_label)
 param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
-    params, scenario_overrides, model_defaults_flat, has_input_errors = render_sidebar_parameters(
-        active_model, selected_label, params, container=param_col
+    params, scenario_overrides, model_defaults_flat, has_input_errors = (
+        render_sidebar_parameters(
+            active_model, selected_label, params, container=param_col
+        )
     )
 
     typed_params = None
@@ -107,14 +125,17 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    # Reset and Save Parameters buttons side by side 
+    # Reset and Save Parameters buttons side by side
     button_col1, button_col2 = st.columns(2)
-    
+
     # Reset Parameters button
     def _handle_reset() -> None:
         model_label = cast(str, selected_label)  # Safe because we checked above
         reset_parameters_to_defaults(
-            model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
+            model_defaults_flat,
+            params,
+            model_label,
+            param_specs=active_model.parameter_specs,
         )
         # Reset scenarios back to model defaults
         default_scenarios = active_model.default_scenarios
@@ -124,10 +145,10 @@ with param_col:
                 default_scenarios,
                 active_model.scenario_parameter_specs or {},
             )
-    
+
     with button_col1:
-        st.button("Reset Parameters", on_click=_handle_reset, width='stretch')
-    
+        st.button("Reset Parameters", on_click=_handle_reset, width="stretch")
+
     # Save Parameters button (only enabled when parameters are valid)
     with button_col2:
         if typed_params is not None:
@@ -138,11 +159,16 @@ with param_col:
                 container=button_col2,
             )
         else:
-            st.button("Save Parameters", disabled=True, width='stretch', help="Fix parameter errors first")
+            st.button(
+                "Save Parameters",
+                disabled=True,
+                width="stretch",
+                help="Fix parameter errors first",
+            )
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, width='stretch', type='primary'
+        "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
     )
 
 with result_col:
@@ -163,7 +189,7 @@ with result_col:
     renderer = get_report_renderer(active_model)
     _HINT = "This report has not been filled, since your simulation has not been run. Run the simulation to see the results here."
 
-    with st.container(key='results-report'):
+    with st.container(key="results-report"):
         if has_results():
             renderer.render(get_run_output())
         else:
@@ -171,4 +197,3 @@ with result_col:
 
     st.divider()
     render_pdf_export_button(container=result_col)
-
