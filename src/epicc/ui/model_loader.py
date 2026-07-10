@@ -39,10 +39,13 @@ def _decode_model_code(code: str) -> bytes:
     compressed = base64.b64decode(stripped, validate=True)
     data = bytearray()
     with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as decompressor:
-        while chunk := decompressor.read(64 * 1024):
-            if len(data) + len(chunk) > _MAX_MODEL_BYTES:
-                raise ValueError("Model code expands beyond 2 MiB")
+        while len(data) < _MAX_MODEL_BYTES:
+            chunk = decompressor.read(min(64 * 1024, _MAX_MODEL_BYTES - len(data)))
+            if not chunk:
+                break
             data.extend(chunk)
+        if len(data) == _MAX_MODEL_BYTES and decompressor.read(1):
+            raise ValueError("Model code expands beyond 2 MiB")
     return bytes(data)
 
 
