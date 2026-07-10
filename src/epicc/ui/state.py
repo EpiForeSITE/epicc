@@ -7,6 +7,8 @@ import streamlit as st
 if TYPE_CHECKING:
     from epicc.model.base import BaseSimulationModel
 
+from epicc.ui.preset_keys import clear_preset_state
+
 _RESULTS_KEY = "results_payload"
 _PRINT_REQUESTED_KEY = "print_requested"
 _PRINT_TOKEN_KEY = "print_trigger_token"
@@ -14,11 +16,6 @@ _ACTIVE_MODEL_KEY = "active_model_key"
 _ACTIVE_PARAM_IDENTITY_KEY = "active_param_identity"
 _PARAMS_KEY = "params"
 _UPLOAD_HASH_CACHE_KEY = "_upload_hash_cache"
-_PRESET_STACK_KEY_PREFIX = "_preset_stack_"
-_PRESET_MODAL_WORKING_KEY_PREFIX = "_modal_wstack_"
-_PRESET_MODAL_OP_KEY_PREFIX = "_pop_"
-_PRESET_MODAL_ADD_CTR_KEY_PREFIX = "_padd_ctr_"
-_FILE_PRESET_KEY_PREFIX = "_file_preset_"
 _CUSTOM_MODELS_KEY = "custom_models"
 
 
@@ -42,11 +39,7 @@ def sync_active_model(model_key: str) -> dict[str, Any]:
         clear_results()
         st.session_state.pop(_UPLOAD_HASH_CACHE_KEY, None)
         st.session_state.pop(_ACTIVE_PARAM_IDENTITY_KEY, None)
-        st.session_state.pop(_PRESET_STACK_KEY_PREFIX + model_key, None)
-        st.session_state.pop(_PRESET_MODAL_WORKING_KEY_PREFIX + model_key, None)
-        st.session_state.pop(_PRESET_MODAL_OP_KEY_PREFIX + model_key, None)
-        st.session_state.pop(_PRESET_MODAL_ADD_CTR_KEY_PREFIX + model_key, None)
-        st.session_state.pop(_FILE_PRESET_KEY_PREFIX + model_key, None)
+        clear_preset_state(model_key)
 
     st.session_state.setdefault(_PARAMS_KEY, {})
     return st.session_state[_PARAMS_KEY]

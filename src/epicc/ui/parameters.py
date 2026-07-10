@@ -17,6 +17,12 @@ from epicc.ui.state import (
     reset_params,
     set_active_param_identity,
 )
+from epicc.ui.preset_keys import (
+    _FILE_PRESET_KEY_PREFIX,
+    _PRESET_INLINE_ADD_CTR_KEY_PREFIX,
+    _PRESET_INLINE_ADD_SEL_KEY_PREFIX,
+    _PRESET_STACK_KEY_PREFIX,
+)
 
 # Avoid circular import — import lazily where needed
 # from epicc.ui.export import render_parameter_export_modal
@@ -513,9 +519,9 @@ def _render_preset_controls_inline(
     Returns ``(active_stack, file_preset)`` reflecting the current state.
     All mutations write directly to session state and trigger ``st.rerun()``.
     """
-    stack_key = f"_preset_stack_{model_key}"
-    file_preset_key = f"_file_preset_{model_key}"
-    add_ctr_key = f"_padd_inline_ctr_{model_key}"
+    stack_key = _PRESET_STACK_KEY_PREFIX + model_key
+    file_preset_key = _FILE_PRESET_KEY_PREFIX + model_key
+    add_ctr_key = _PRESET_INLINE_ADD_CTR_KEY_PREFIX + model_key
 
     model_presets: list[Preset] = model.presets or []
 
@@ -552,7 +558,7 @@ def _render_preset_controls_inline(
         available = [p for p in all_presets if p.id not in active_stack]
         if available:
             add_ctr: int = st.session_state.get(add_ctr_key, 0)
-            add_sel_key = f"_padd_inline_{model_key}_{add_ctr}"
+            add_sel_key = f"{_PRESET_INLINE_ADD_SEL_KEY_PREFIX}{model_key}_{add_ctr}"
 
             chosen = st.selectbox(
                 "Add preset",
@@ -656,7 +662,7 @@ def render_sidebar_parameters(
     active_stack, file_preset = _render_preset_controls_inline(model, model_key, ct)
 
     file_preset_data: dict[str, Any] | None = st.session_state.get(
-        f"_file_preset_{model_key}"
+        _FILE_PRESET_KEY_PREFIX + model_key
     )
     all_presets: list[Preset] = (
         [file_preset] if file_preset is not None else []
