@@ -25,6 +25,10 @@ def _infer_filename_from_url(url: str) -> str:
     return filename
 
 
+def _custom_model_key(name: str) -> str:
+    return f"[Custom] {name}"
+
+
 def _decode_model_code(code: str) -> bytes:
     """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
     _MAX_OUTPUT = 2 * 1024 * 1024  # 2 MiB safety cap against decompression bombs
@@ -67,8 +71,8 @@ def _load_model_dialog() -> None:
                     model = load_model_from_stream(
                         uploaded.name, io.BytesIO(uploaded.read())
                     )
-                add_custom_model(model.human_name(), model)
-                st.session_state[_PENDING_MODEL_KEY] = model.human_name()
+                key = add_custom_model(_custom_model_key(model.human_name()), model)
+                st.session_state[_PENDING_MODEL_KEY] = key
                 st.rerun()
             except Exception as exc:
                 st.error(f"Could not load model: {exc}")
@@ -99,8 +103,8 @@ def _load_model_dialog() -> None:
 
                 filename = _infer_filename_from_url(url)
                 model = load_model_from_stream(filename, io.BytesIO(raw))
-                add_custom_model(model.human_name(), model)
-                st.session_state[_PENDING_MODEL_KEY] = model.human_name()
+                key = add_custom_model(_custom_model_key(model.human_name()), model)
+                st.session_state[_PENDING_MODEL_KEY] = key
                 st.rerun()
             except urllib.error.URLError as exc:
                 reason = exc.reason if hasattr(exc, "reason") else str(exc)
@@ -129,8 +133,8 @@ def _load_model_dialog() -> None:
                     model = load_model_from_stream(
                         "model.yaml", io.BytesIO(_decode_model_code(code))
                     )
-                add_custom_model(model.human_name(), model)
-                st.session_state[_PENDING_MODEL_KEY] = model.human_name()
+                key = add_custom_model(_custom_model_key(model.human_name()), model)
+                st.session_state[_PENDING_MODEL_KEY] = key
                 st.rerun()
             except Exception as exc:
                 st.error(f"Could not load model: {exc}")

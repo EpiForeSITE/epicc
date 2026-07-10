@@ -80,7 +80,16 @@ def get_custom_models() -> "dict[str, BaseSimulationModel]":
     return st.session_state.get(_CUSTOM_MODELS_KEY, {})
 
 
-def add_custom_model(name: str, model: "BaseSimulationModel") -> None:
+def add_custom_model(name: str, model: "BaseSimulationModel") -> str:
+    """Add a custom model and return the key it was stored under."""
     if _CUSTOM_MODELS_KEY not in st.session_state:
         st.session_state[_CUSTOM_MODELS_KEY] = {}
-    st.session_state[_CUSTOM_MODELS_KEY][name] = model
+    existing = st.session_state[_CUSTOM_MODELS_KEY]
+    key = name
+    counter = 2
+    while key in existing:
+        key = f"{name} ({counter})"
+        counter += 1
+    # counter is local to `name`, so "Model A (2)" and "Model B (2)" are independent
+    existing[key] = model
+    return key
