@@ -1,5 +1,3 @@
-from io import BytesIO
-
 import pytest
 
 from epicc.model import create_model_class, create_model_instance
@@ -7,7 +5,6 @@ from epicc.model.base import BaseSimulationModel
 from epicc.model.schema import (
     Equation,
     GraphBlock,
-    MarkdownBlock,
     Model,
     Parameter,
     Scenario,

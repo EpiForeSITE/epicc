@@ -108,8 +108,9 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    # Reset and Save Parameters buttons side by side 
-    button_col1, button_col2 = st.columns(2)
+    # Force both controls into the same keyed row for CSS alignment
+    with st.container(key="param-actions-row"):
+        button_col1, button_col2 = st.columns(2, gap="small", vertical_alignment="top")
     
     # Reset Parameters button
     def _handle_reset() -> None:
@@ -125,30 +126,38 @@ with param_col:
                 default_scenarios,
                 active_model.scenario_parameter_specs or {},
             )
-    
-    with button_col1:
-        st.button("Reset Parameters", on_click=_handle_reset, width='stretch')
-    
+
+    button_col1.button(
+        "Reset Parameters",
+        on_click=_handle_reset,
+        use_container_width=True,
+    )
+
     # Save Parameters button (only enabled when parameters are valid)
-    with button_col2:
-        if typed_params is not None:
-            render_parameter_export_modal(
-                active_model.human_name(),
-                typed_params.model_dump(),
-                pydantic_model=type(typed_params),
-                container=button_col2,
-            )
-        else:
-            st.button("Save Parameters", disabled=True, width='stretch', help="Fix parameter errors first")
+    if typed_params is not None:
+        render_parameter_export_modal(
+            active_model.human_name(),
+            typed_params.model_dump(),
+            pydantic_model=type(typed_params),
+            container=button_col2,
+        )
+    else:
+        button_col2.button(
+            "Save Parameters",
+            disabled=True,
+            use_container_width=True,
+            help="Fix parameter errors first",
+        )
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, width='stretch', type='primary'
+        "Run Simulation",
+        disabled=has_input_errors,
+        use_container_width=True,
+        type="primary",
     )
 
 with result_col:
-    trigger_print_if_requested()
-
     if typed_params is None:
         st.warning("Fix parameter errors to enable simulation.")
         st.stop()
@@ -177,4 +186,6 @@ with result_col:
         get_run_output() if has_results() else None,
         container=result_col,
     )
+
+trigger_print_if_requested()
 

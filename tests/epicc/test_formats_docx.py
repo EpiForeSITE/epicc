@@ -1,18 +1,27 @@
-from pathlib import Path
 from zipfile import ZipFile
-from unittest.mock import MagicMock
 
-import pytest
-
-from epicc.formats.docx import DOCXFormat
+from epicc.ui.report_exports import build_report_docx_bytes
 
 
 def _make_report_payload(title: str = "Test Report") -> dict:
     return {
         "__report__": {
             "title": title,
+            "description": "Summary paragraph",
             "sections": [
-                {"type": "markdown", "content": "## Overview\nSome text here."},
+                {
+                    "type": "markdown",
+                    "content": "## Overview\n- **Strong point**\n$$\\LaTeX \\text{ test.}$$\nSome text here.",
+                },
+                {
+                    "type": "graph",
+                    "kind": "bar",
+                    "title": "Outcomes",
+                    "caption": "Chart caption",
+                    "rows": [
+                        {"label": "Cases", "values": {"Scenario A": 5, "Scenario B": 3}},
+                    ],
+                },
                 {
                     "type": "table",
                     "title": "Results",
@@ -28,8 +37,7 @@ def _make_report_payload(title: str = "Test Report") -> dict:
 
 
 def test_write_produces_valid_zip():
-    fmt = DOCXFormat(Path("report.docx"))
-    result = fmt.write(_make_report_payload())
+    result = build_report_docx_bytes(_make_report_payload())
     assert isinstance(result, bytes)
     with ZipFile.__new__(ZipFile) as _:
         pass
@@ -41,17 +49,16 @@ def test_write_produces_valid_zip():
 
 
 def test_write_contains_title():
-    fmt = DOCXFormat(Path("report.docx"))
-    result = fmt.write(_make_report_payload("My Report"))
+    result = build_report_docx_bytes(_make_report_payload("My Report"))
     from io import BytesIO
     with ZipFile(BytesIO(result)) as zf:
         doc_xml = zf.read("word/document.xml").decode()
     assert "My Report" in doc_xml
+    assert "Summary paragraph" in doc_xml
 
 
 def test_write_contains_scenario_values():
-    fmt = DOCXFormat(Path("report.docx"))
-    result = fmt.write(_make_report_payload())
+    result = build_report_docx_bytes(_make_report_payload())
     from io import BytesIO
     with ZipFile(BytesIO(result)) as zf:
         doc_xml = zf.read("word/document.xml").decode()
@@ -60,15 +67,13 @@ def test_write_contains_scenario_values():
 
 
 def test_write_contains_markdown_content():
-    fmt = DOCXFormat(Path("report.docx"))
-    result = fmt.write(_make_report_payload())
+    result = build_report_docx_bytes(_make_report_payload())
     from io import BytesIO
     with ZipFile(BytesIO(result)) as zf:
         doc_xml = zf.read("word/document.xml").decode()
     assert "Some text here" in doc_xml
-
-
-def test_read_raises_not_implemented():
-    fmt = DOCXFormat(Path("report.docx"))
-    with pytest.raises(NotImplementedError):
-        fmt.read(b"")
+    assert "Strong point" in doc_xml
+    assert "LaTeX test." in doc_xml
+    assert "**" not in doc_xml
+    assert "$$" not in doc_xml
+    assert "Chart type: bar" in doc_xml

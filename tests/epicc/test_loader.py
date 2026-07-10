@@ -1,5 +1,3 @@
-import pytest
-
 from epicc.model.base import BaseSimulationModel
 from epicc.model.models import MODEL_REGISTRY, get_all_models
 
