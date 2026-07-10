@@ -27,8 +27,13 @@ def _infer_filename_from_url(url: str) -> str:
 
 def _decode_model_code(code: str) -> bytes:
     """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
+    _MAX_OUTPUT = 2 * 1024 * 1024  # 2 MiB safety cap against decompression bombs
     compressed = base64.b64decode(code.strip())
-    return lzma.decompress(compressed)
+    decompressor = lzma.LZMADecompressor()
+    data = decompressor.decompress(compressed, max_length=_MAX_OUTPUT + 1)
+    if len(data) > _MAX_OUTPUT or not decompressor.eof:
+        raise ValueError("Model code expands beyond 2 MiB")
+    return data
 
 
 @st.dialog("Load Custom Model", width="large")
