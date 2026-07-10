@@ -25,7 +25,7 @@
    - *Unsure the best way to do this.*
 5. As any user authoring my own parameter file, I want clear validation error messages when the file is malformed or missing required fields, so I can fix it myself.
 
-**Status:** Yes, exporting/importing is a common feature throughout the cost calculator. Model parameters may include help text and references to aide in future understanding and documentation. All is checked against a dynamically generated Pydantic model at update time to help ensure correctness.
+**Status:** Yes, exporting/importing is a common feature throughout the cost calculator. Model parameters may include help text and references to aid in future understanding and documentation. All is checked against a dynamically generated Pydantic model at update time to help ensure correctness.
 
 ### Developer
 
