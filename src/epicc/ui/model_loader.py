@@ -14,6 +14,7 @@ from epicc.ui.state import add_custom_model
 
 _PENDING_MODEL_KEY = "_pending_model_selection"
 _MAX_MODEL_BYTES = 2 * 1024 * 1024  # 2 MiB cap applied to all model inputs
+_CHUNK_SIZE = 64 * 1024
 
 
 def _infer_filename_from_url(url: str) -> str:
@@ -40,11 +41,11 @@ def _decode_model_code(code: str) -> bytes:
     data = bytearray()
     with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as decompressor:
         while len(data) < _MAX_MODEL_BYTES:
-            chunk = decompressor.read(min(64 * 1024, _MAX_MODEL_BYTES - len(data)))
+            chunk = decompressor.read(min(_CHUNK_SIZE, _MAX_MODEL_BYTES - len(data)))
             if not chunk:
                 break
             data.extend(chunk)
-        if len(data) == _MAX_MODEL_BYTES and decompressor.read(1):
+        if len(data) >= _MAX_MODEL_BYTES and decompressor.read(1):
             raise ValueError("Model code expands beyond 2 MiB")
     return bytes(data)
 
