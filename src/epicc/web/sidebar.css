@@ -25,7 +25,7 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
 
 /* Fix model selector alignment. TODO: be more specific, `:first-child`? */
 .stVerticalBlock {
-	justify-content: center;
+    justify-content: center;
 }
 
 /* Sidebar section headers */
@@ -95,16 +95,22 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
         margin: 0.5in;
     }
 
-    /* [data-testid="stAppViewContainer"] {
-        margin: 0 !important;
-        padding: 0 !important;
+    html, body, #root, .stlite-container, [data-testid="stAppViewContainer"] {
+        height: auto !important;
+        overflow: visible !important;
+        opacity: 1 !important;
+        filter: none !important;
+        -webkit-filter: none !important;
     }
 
-    [data-testid="stMainBlockContainer"] {
-        max-width: 100% !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    } */
+    [data-testid="stSelectbox"],
+    [data-testid="stColumn"] button,
+    [data-testid="stHeader"],
+    [data-testid="stSidebar"],
+    .stAppDeployButton,
+    footer {
+        display: none !important;
+    }
 
     .section-divider {
         page-break-after: auto;
@@ -135,8 +141,6 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
         padding-bottom: 1.5rem !important;
     }
 
-    /* Show only results. */
-
     body * {
         display: none;
     }
@@ -158,6 +162,8 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     .st-key-results-report,
     .st-key-results-report * {
         display: revert !important;
+        opacity: 1 !important;
+        filter: none !important;
     }
 }
 
@@ -200,14 +206,34 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     margin-top: 1.25rem !important;
 }
 
+/* Plotly text contrast follows the active Streamlit theme */
+.st-key-results-report [data-testid="stPlotlyChart"] {
+    color: inherit !important;
+}
+
+.st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot,
+.st-key-results-report [data-testid="stPlotlyChart"] .plot-container,
+.st-key-results-report [data-testid="stPlotlyChart"] .main-svg {
+    color: inherit !important;
+}
+
+.st-key-results-report .js-plotly-plot text,
+.st-key-results-report .js-plotly-plot .legendtext,
+.st-key-results-report .js-plotly-plot .gtitle,
+.st-key-results-report .js-plotly-plot .xtick text,
+.st-key-results-report .js-plotly-plot .ytick text,
+.st-key-results-report .js-plotly-plot .annotation text,
+.st-key-results-report .js-plotly-plot .infolayer text {
+    fill: currentColor !important;
+    color: inherit !important;
+}
+
 /* -------- Print/PDF display fixes only (SINGLE CONSOLIDATED BLOCK) -------- */
 @media print {
-    /* Scope strictly to report area */
     .st-key-results-report {
         overflow: visible !important;
     }
 
-    /* 1) Keep chart block in flow + reserve vertical space below chart */
     .st-key-results-report [data-testid="stPlotlyChart"],
     .st-key-results-report [data-testid="stVegaLiteChart"],
     .st-key-results-report [data-testid="stPyplot"] {
@@ -221,22 +247,26 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
         padding-bottom: 1.2rem !important;
     }
 
-    /* Prevent Plotly print-height collapse */
     .st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot {
         min-height: 520px !important;
     }
 
-    /* 2) Ensure headings/text start after chart and have breathing room */
     .st-key-results-report h1,
     .st-key-results-report h2,
     .st-key-results-report h3,
-    .st-key-results-report h4,
+    .st-key-results-report h4 {
+        clear: both !important;
+        position: static !important;
+        z-index: auto !important;
+        margin-top: 2rem !important;
+    }
+
     .st-key-results-report p,
     .st-key-results-report [data-testid="stMarkdownContainer"] {
         clear: both !important;
         position: static !important;
         z-index: auto !important;
-        margin-top: 2rem !important;
+        margin-top: 0.5rem !important;
     }
 
     .st-key-results-report [data-testid="stMarkdownContainer"] h1,
@@ -246,7 +276,6 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
         clear: both !important;
     }
 
-    /* 3) Formula print fix: show only visual layer, hide assistive MathML */
     .st-key-results-report .katex,
     .st-key-results-report .katex-display,
     .st-key-results-report mjx-container,
@@ -260,7 +289,7 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
         display: none !important;
     }
 
-    /* 4) Force strong chart/text contrast for PDF export */
+    /* Force strict contrast engine reset across stlite modules */
     .st-key-results-report,
     .st-key-results-report * {
         color: #111827 !important;
@@ -270,10 +299,8 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     }
 
     .st-key-results-report [data-testid="stPlotlyChart"],
-    .st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot,
-    .st-key-results-report [data-testid="stPlotlyChart"] .plot-container,
-    .st-key-results-report [data-testid="stPlotlyChart"] .main-svg {
-        color: #111827 !important;
+    .st-key-results-report [data-testid="stPlotlyChart"] * {
+        opacity: 1 !important;
     }
 
     .st-key-results-report .js-plotly-plot text,
@@ -308,26 +335,4 @@ div[data-testid="InputInstructions"] > span:nth-child(1) {
     .st-key-results-report .js-plotly-plot .barlayer .trace path {
         stroke-opacity: 1 !important;
     }
-}
-
-/* Plotly text contrast follows the active Streamlit theme */
-.st-key-results-report [data-testid="stPlotlyChart"] {
-    color: inherit !important;
-}
-
-.st-key-results-report [data-testid="stPlotlyChart"] .js-plotly-plot,
-.st-key-results-report [data-testid="stPlotlyChart"] .plot-container,
-.st-key-results-report [data-testid="stPlotlyChart"] .main-svg {
-    color: inherit !important;
-}
-
-.st-key-results-report .js-plotly-plot text,
-.st-key-results-report .js-plotly-plot .legendtext,
-.st-key-results-report .js-plotly-plot .gtitle,
-.st-key-results-report .js-plotly-plot .xtick text,
-.st-key-results-report .js-plotly-plot .ytick text,
-.st-key-results-report .js-plotly-plot .annotation text,
-.st-key-results-report .js-plotly-plot .infolayer text {
-    fill: currentColor !important;
-    color: inherit !important;
 }
