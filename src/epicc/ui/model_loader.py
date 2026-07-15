@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import io
-import lzma
 import urllib.error
 import urllib.request
 from typing import Any
@@ -14,6 +14,7 @@ from epicc.ui.state import add_custom_model
 
 _PENDING_MODEL_KEY = "_pending_model_selection"
 _MAX_MODEL_BYTES = 2 * 1024 * 1024  # 2 MiB cap applied to all model inputs
+_CHUNK_SIZE = 64 * 1024
 
 
 def _infer_filename_from_url(url: str) -> str:
@@ -31,17 +32,22 @@ def _custom_model_key(name: str) -> str:
 
 
 def _decode_model_code(code: str) -> bytes:
-    """Decode a base64-encoded, LZMA-compressed YAML model code into raw YAML bytes."""
+    """Decode a base64-encoded, gzip-compressed YAML model code into raw YAML bytes."""
     stripped = code.strip()
     # base64 encodes 3 bytes → 4 chars; a _MAX_MODEL_BYTES payload needs ~4/3× that many chars
     if len(stripped) > _MAX_MODEL_BYTES * 4 // 3 + 64:
         raise ValueError("Model code is too large (max 2 MiB)")
     compressed = base64.b64decode(stripped, validate=True)
-    decompressor = lzma.LZMADecompressor()
-    data = decompressor.decompress(compressed, max_length=_MAX_MODEL_BYTES + 1)
-    if len(data) > _MAX_MODEL_BYTES or not decompressor.eof:
-        raise ValueError("Model code expands beyond 2 MiB")
-    return data
+    data = bytearray()
+    with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as decompressor:
+        while len(data) < _MAX_MODEL_BYTES:
+            chunk = decompressor.read(min(_CHUNK_SIZE, _MAX_MODEL_BYTES - len(data)))
+            if not chunk:
+                break
+            data.extend(chunk)
+        if len(data) == _MAX_MODEL_BYTES and decompressor.read(1):
+            raise ValueError("Model code expands beyond 2 MiB")
+    return bytes(data)
 
 
 @st.dialog("Load Custom Model", width="large")
