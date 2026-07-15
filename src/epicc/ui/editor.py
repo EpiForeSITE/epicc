@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
@@ -15,6 +16,8 @@ from epicc.model.schema import Model
 
 _DOC_KEY = "editor_doc"
 _SOURCE_KEY = "editor_source_label"
+_ADD_FORM_REVISION_KEY = "editor_add_form_revision"
+_GROUP_EDITOR_EXPANDED_KEY = "editor_group_editor_expanded"
 
 
 _BLANK: dict[str, Any] = {
@@ -23,7 +26,7 @@ _BLANK: dict[str, Any] = {
     "authors": [],
     "parameters": {},
     "equations": {},
-    "groups": None,
+    "groups": [],
     "scenarios": [],
     "report": [],
     "figures": [],
@@ -32,6 +35,29 @@ _BLANK: dict[str, Any] = {
 
 _YAML_MIME = "text/yaml"
 _YAML_SUFFIX = "yaml"
+
+
+@dataclass(frozen=True)
+class ValidationIssue:
+    """A validation problem phrased for model-editor users."""
+
+    location: str
+    message: str
+    technical_detail: str
+
+
+_FIELD_LABELS = {
+    "authors": "Authors",
+    "description": "Description",
+    "equations": "Equations",
+    "figures": "Figures",
+    "groups": "Parameter groups",
+    "parameters": "Parameters",
+    "presets": "Presets",
+    "report": "Report",
+    "scenarios": "Scenarios",
+    "title": "Model title",
+}
 
 
 
@@ -45,6 +71,19 @@ def _set_doc(doc: dict[str, Any], source_label: str | None = None) -> None:
     st.session_state[_SOURCE_KEY] = source_label
 
 
+def _add_form_key(name: str) -> str:
+    """Return a new widget key after each successful add action."""
+    revision = st.session_state.get(_ADD_FORM_REVISION_KEY, 0)
+    return f"{name}_{revision}"
+
+
+def _reset_add_forms() -> None:
+    """Give all add forms fresh widget identities on the next render."""
+    st.session_state[_ADD_FORM_REVISION_KEY] = (
+        st.session_state.get(_ADD_FORM_REVISION_KEY, 0) + 1
+    )
+
+
 def _init_state(
     initial_doc: dict[str, Any] | None = None,
     source_label: str | None = None,
@@ -56,9 +95,7 @@ def _init_state(
     shown.
     """
     current_source = st.session_state.get(_SOURCE_KEY)
-    if _DOC_KEY not in st.session_state or (
-        source_label is not None and current_source != source_label
-    ):
+    if _DOC_KEY not in st.session_state or current_source != source_label:
         st.session_state[_DOC_KEY] = (
             deepcopy(initial_doc) if initial_doc is not None else deepcopy(_BLANK)
         )
@@ -67,18 +104,40 @@ def _init_state(
 
 
 
-def _validate(doc: dict[str, Any]) -> Model | list[str]:
-    """Return a validated ``Model`` or a list of human-readable error strings."""
+def _validate(doc: dict[str, Any]) -> Model | list[ValidationIssue]:
+    """Return a validated ``Model`` or user-friendly validation issues."""
     try:
         return opaque_to_typed(doc, Model)
     except ValidationError as exc:
-        lines: list[str] = []
+        issues: list[ValidationIssue] = []
         for err in exc.errors():
-            loc = " > ".join(str(p) for p in err["loc"]) if err["loc"] else "(root)"
-            lines.append(f"**{loc}**: {err['msg']}")
-        return lines
+            path = tuple(str(part) for part in err["loc"])
+            field = (
+                _FIELD_LABELS.get(path[0], path[0].replace("_", " ").title())
+                if path
+                else "Model"
+            )
+            location = " > ".join((field, *path[1:]))
+            message = err["msg"]
+            if path == ("groups",) and err["type"] == "list_type":
+                message = "No parameter groups are required. Use an empty list (`[]`) or add a group."
+            technical_location = " > ".join(path) if path else "(root)"
+            issues.append(
+                ValidationIssue(
+                    location=location,
+                    message=message,
+                    technical_detail=f"{technical_location}: {err['msg']} [{err['type']}]",
+                )
+            )
+        return issues
     except Exception as exc:
-        return [str(exc)]
+        return [
+            ValidationIssue(
+                location="Model",
+                message="Could not validate this model.",
+                technical_detail=str(exc),
+            )
+        ]
 
 
 
@@ -170,15 +229,22 @@ def _render_metadata_tab(doc: dict[str, Any]) -> None:
 
     ac1, ac2, ac3 = st.columns([3, 3, 1])
     new_author_name = ac1.text_input(
-        "Name", key="new_author_name", placeholder="e.g. Jane Doe", label_visibility="collapsed"
+        "Name",
+        key=_add_form_key("new_author_name"),
+        placeholder="e.g. Jane Doe",
+        label_visibility="collapsed",
     )
     new_author_email = ac2.text_input(
-        "Email (optional)", key="new_author_email", placeholder="e.g. jane@law.net", label_visibility="collapsed"
+        "Email (optional)",
+        key=_add_form_key("new_author_email"),
+        placeholder="e.g. jane@law.net",
+        label_visibility="collapsed",
     )
     if ac3.button("Add", key="author_add"):
         name = new_author_name.strip()
         if name:
             authors.append({"name": name, "email": new_author_email.strip() or None})
+            _reset_add_forms()
             st.rerun()
 
 
@@ -196,8 +262,16 @@ def _render_parameters_tab(doc: dict[str, Any]) -> None:
 
     with st.expander("Add new parameter", expanded=False):
         new_id = st.text_input(
-            "Parameter ID", key="new_param_id", placeholder="e.g. cost_per_case"
+            "Parameter ID",
+            key=_add_form_key("new_param_id"),
+            placeholder="e.g. cost_per_case",
         )
+        new_label = st.text_input(
+            "Label (optional)",
+            key=_add_form_key("new_param_label"),
+            placeholder="e.g. Cost per case",
+        )
+        
         if st.button("Add parameter", key="param_add_btn"):
             new_id = new_id.strip()
             if not new_id:
@@ -207,11 +281,12 @@ def _render_parameters_tab(doc: dict[str, Any]) -> None:
             else:
                 params[new_id] = {
                     "type": "number",
-                    "label": "",
+                    "label": new_label.strip(),
                     "description": None,
                     "default": 0.0,
                     "context": "equation",
                 }
+                _reset_add_forms()
                 st.rerun()
 
     if groups:
@@ -243,7 +318,10 @@ def _param_expander(params: dict[str, Any], param_id: str) -> None:
 def _render_groups_editor(doc: dict[str, Any]) -> None:
     groups: list[Any] = doc.get("groups") or []
 
-    with st.expander("Edit parameter groups", expanded=False):
+    with st.expander(
+        "Edit parameter groups",
+        expanded=st.session_state.pop(_GROUP_EDITOR_EXPANDED_KEY, False),
+    ):
         st.caption(
             "Groups control how parameters are visually organised in the sidebar. "
             "Each top-level group becomes an expander. Children are parameter IDs "
@@ -259,44 +337,22 @@ def _render_groups_editor(doc: dict[str, Any]) -> None:
                 nc1.text(f"(bare) {node}")
                 if nc2.button("Remove", key=f"grp_bare_rm_{gi}"):
                     groups.pop(gi)
-                    doc["groups"] = groups or None
+                    doc["groups"] = groups
+                    st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
                     st.rerun()
+
             elif isinstance(node, dict):
                 with st.expander(node.get("label", f"Group {gi + 1}"), expanded=True):
-                    node["label"] = st.text_input(
-                        "Group label", value=node.get("label", ""), key=f"grp_label_{gi}"
-                    )
-                    children: list[Any] = node.setdefault("children", [])
-                    for ci, child in enumerate(children):
-                        if isinstance(child, str):
-                            cc1, cc2 = st.columns([4, 1])
-                            cc1.text(child)
-                            if cc2.button("Remove", key=f"grp_child_rm_{gi}_{ci}"):
-                                children.pop(ci)
-                                st.rerun()
-
-                    available = [pid for pid in all_param_ids if pid not in children]
-                    if available:
-                        ac1, ac2 = st.columns([3, 1])
-                        add_pid = ac1.selectbox(
-                            "Add parameter",
-                            available,
-                            key=f"grp_add_pid_{gi}",
-                            label_visibility="collapsed",
-                        )
-                        if ac2.button("Add", key=f"grp_add_btn_{gi}"):
-                            children.append(add_pid)
-                            st.rerun()
-
-                    if st.button("Delete group", key=f"grp_delete_{gi}", type="secondary"):
+                    if _render_group_node(node, str(gi), all_param_ids):
                         groups.pop(gi)
-                        doc["groups"] = groups or None
+                        doc["groups"] = groups
+                        st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
                         st.rerun()
 
         gc1, gc2 = st.columns([3, 1])
         new_grp_label = gc1.text_input(
             "Group label",
-            key="new_grp_label",
+            key=_add_form_key("new_grp_label"),
             placeholder="e.g. Cost parameters",
             label_visibility="collapsed",
         )
@@ -304,7 +360,67 @@ def _render_groups_editor(doc: dict[str, Any]) -> None:
             label = new_grp_label.strip() or "New group"
             groups.append({"label": label, "children": []})
             doc["groups"] = groups
+            _reset_add_forms()
+            st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
             st.rerun()
+
+
+def _render_group_node(
+    group: dict[str, Any], path: str, all_param_ids: list[str]
+) -> bool:
+    """Render a group and return whether the caller should delete it."""
+    group["label"] = st.text_input(
+        "Group label", value=group.get("label", ""), key=f"grp_label_{path}"
+    )
+    children: list[Any] = group.setdefault("children", [])
+
+    for child_index, child in enumerate(children):
+        child_path = f"{path}_{child_index}"
+        if isinstance(child, str):
+            child_col, remove_col = st.columns([4, 1])
+            child_col.text(child)
+            if remove_col.button("Remove", key=f"grp_child_rm_{child_path}"):
+                children.pop(child_index)
+                st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
+                st.rerun()
+
+        elif isinstance(child, dict):
+            with st.expander(child.get("label", "Nested group"), expanded=True):
+                if _render_group_node(child, child_path, all_param_ids):
+                    children.pop(child_index)
+                    st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
+                    st.rerun()
+
+    direct_parameter_ids = {child for child in children if isinstance(child, str)}
+    available = [pid for pid in all_param_ids if pid not in direct_parameter_ids]
+    if available:
+        add_param_col, add_param_btn_col = st.columns([3, 1])
+        add_pid = add_param_col.selectbox(
+            "Add parameter",
+            available,
+            key=_add_form_key(f"grp_add_pid_{path}"),
+            label_visibility="collapsed",
+        )
+        if add_param_btn_col.button("Add parameter", key=f"grp_add_btn_{path}"):
+            children.append(add_pid)
+            _reset_add_forms()
+            st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
+            st.rerun()
+
+    nested_label_col, nested_add_col = st.columns([3, 1])
+    nested_label = nested_label_col.text_input(
+        "Nested group label",
+        key=_add_form_key(f"grp_nested_label_{path}"),
+        placeholder="e.g. Treatment costs",
+        label_visibility="collapsed",
+    )
+    if nested_add_col.button("Add nested group", key=f"grp_nested_add_{path}"):
+        children.append({"label": nested_label.strip() or "New group", "children": []})
+        _reset_add_forms()
+        st.session_state[_GROUP_EDITOR_EXPANDED_KEY] = True
+        st.rerun()
+
+    return st.button("Delete group", key=f"grp_delete_{path}", type="secondary")
 
 
 def _render_single_parameter(
@@ -343,7 +459,12 @@ def _render_single_parameter(
         ["equation", "scenario"],
         index=0 if spec.get("context", "equation") == "equation" else 1,
         key=f"param_ctx_{k}",
-        help="Equation parameters appear in the sidebar; scenario parameters are set per scenario.",
+        help=(
+            "Use **equation** for one shared value, entered in the calculator "
+            "sidebar and available to every scenario. Use **scenario** when "
+            "each scenario needs its own value; it is entered within each "
+            "scenario definition."
+        ),
     )
     spec["unit"] = (
         c2.text_input(
@@ -502,7 +623,9 @@ def _render_equations_tab(doc: dict[str, Any]) -> None:
 
     with st.expander("Add new equation", expanded=False):
         new_id = st.text_input(
-            "Equation ID", key="new_eq_id", placeholder="e.g. total_cost"
+            "Equation ID",
+            key=_add_form_key("new_eq_id"),
+            placeholder="e.g. total_cost",
         )
         if st.button("Add equation", key="eq_add_btn"):
             new_id = new_id.strip()
@@ -512,6 +635,7 @@ def _render_equations_tab(doc: dict[str, Any]) -> None:
                 st.error(f"Equation ID '{new_id}' already exists.")
             else:
                 eqs[new_id] = {"label": "", "compute": ""}
+                _reset_add_forms()
                 st.rerun()
 
     for eq_id in list(eqs.keys()):
@@ -535,7 +659,15 @@ def _render_single_equation(
         else 0
     )
     selected_output = c2.selectbox(
-        "Output type", output_options, index=output_idx, key=f"eq_output_{k}"
+        "Output type",
+        output_options,
+        index=output_idx,
+        key=f"eq_output_{k}",
+        help=(
+            "Use **number** for values that may include decimals, such as costs "
+            "or rates. Use **integer** for whole-number counts, such as cases. "
+            "This does not round or convert the equation result."
+        ),
     )
     eq["output"] = None if selected_output == "(none)" else selected_output
 
@@ -593,14 +725,19 @@ def _render_scenarios_tab(doc: dict[str, Any]) -> None:
 
     with st.expander("Add scenario", expanded=False):
         ns_id = st.text_input(
-            "ID", key="new_scen_id", placeholder=f"e.g. scenario_{len(scenarios) + 1}"
+            "ID",
+            key=_add_form_key("new_scen_id"),
+            placeholder=f"e.g. scenario_{len(scenarios) + 1}",
         )
         ns_label = st.text_input(
-            "Label", key="new_scen_label", placeholder="e.g. Low intervention"
+            "Label",
+            key=_add_form_key("new_scen_label"),
+            placeholder="e.g. Low intervention",
         )
         if st.button("Add scenario", key="scenario_add_btn"):
             scen_id = ns_id.strip() or f"scenario_{len(scenarios) + 1}"
             scenarios.append({"id": scen_id, "label": ns_label.strip(), "vars": {}})
+            _reset_add_forms()
             st.rerun()
 
     for i, scenario in enumerate(scenarios):
@@ -662,14 +799,15 @@ def _render_single_scenario(
 
     ek1, ek2, ek3 = st.columns([2, 3, 1])
     new_extra_k = ek1.text_input(
-        "New key", key=f"scen_new_extra_k_{k}", placeholder="var_name"
+        "New key", key=_add_form_key(f"scen_new_extra_k_{k}"), placeholder="var_name"
     )
     new_extra_v = ek2.text_input(
-        "New value", key=f"scen_new_extra_v_{k}", placeholder="value"
+        "New value", key=_add_form_key(f"scen_new_extra_v_{k}"), placeholder="value"
     )
     if ek3.button("Add var", key=f"scen_extra_add_{k}"):
         if new_extra_k and new_extra_k not in vars_dict:
             vars_dict[new_extra_k] = new_extra_v
+            _reset_add_forms()
             st.rerun()
 
     st.divider()
@@ -696,10 +834,11 @@ def _render_report_tab(doc: dict[str, Any]) -> None:
         new_type = st.selectbox(
             "Block type",
             ["markdown", "table", "graph"],
-            key="report_new_block_type",
+            key=_add_form_key("report_new_block_type"),
         )
         if st.button("Add block", key="report_add_block"):
             report.append(_blank_block(new_type))
+            _reset_add_forms()
             st.rerun()
 
     for i, block in enumerate(report):
@@ -872,14 +1011,19 @@ def _render_presets_tab(doc: dict[str, Any]) -> None:
 
     with st.expander("Add preset", expanded=False):
         np_id = st.text_input(
-            "ID", key="new_preset_id", placeholder=f"e.g. preset_{len(presets) + 1}"
+            "ID",
+            key=_add_form_key("new_preset_id"),
+            placeholder=f"e.g. preset_{len(presets) + 1}",
         )
         np_label = st.text_input(
-            "Label", key="new_preset_label", placeholder="e.g. High cost scenario"
+            "Label",
+            key=_add_form_key("new_preset_label"),
+            placeholder="e.g. High cost scenario",
         )
         if st.button("Add preset", key="preset_add_btn"):
             preset_id = np_id.strip() or f"preset_{len(presets) + 1}"
             presets.append({"id": preset_id, "label": np_label.strip(), "params": {}})
+            _reset_add_forms()
             st.rerun()
 
     for i, preset in enumerate(presets):
@@ -957,7 +1101,9 @@ def _render_single_preset(
 
 
 
-def _render_import_section(doc: dict[str, Any]) -> None:
+def _render_import_section(
+    doc: dict[str, Any], source_label: str | None
+) -> None:
     with st.expander("Load a different model file", expanded=False):
         uploaded = st.file_uploader(
             "Upload a model YAML file",
@@ -978,23 +1124,29 @@ def _render_import_section(doc: dict[str, Any]) -> None:
                 else:
                     st.success("File is valid.")
                 if st.button("Load into editor", key="editor_load_btn"):
-                    _set_doc(raw_data, source_label=None)
+                    _set_doc(raw_data, source_label=source_label)
                     st.rerun()
             except Exception as exc:
                 st.error(f"Could not read file: {exc}")
 
-        if st.button("Reset to blank model", key="editor_reset_btn"):
-            _set_doc(deepcopy(_BLANK), source_label=None)
+        if st.button("New from empty", key="editor_reset_btn"):
+            # Keep the selected model as the editor source marker.  Otherwise
+            # _init_state interprets the next rerun as a model switch and
+            # restores that model's definition over this empty document.
+            _set_doc(deepcopy(_BLANK), source_label=source_label)
             st.rerun()
 
 
 
 
-def _render_validation_errors(errors: list[str]) -> None:
-    st.error(f"Model has {len(errors)} validation error(s).")
-    with st.expander("Validation details", expanded=False):
-        for line in errors:
-            st.markdown(f"- {line}")
+def _render_validation_errors(errors: list[ValidationIssue]) -> None:
+    issue_word = "issue" if len(errors) == 1 else "issues"
+    st.error(f"Fix {len(errors)} {issue_word} before exporting your model.")
+    for issue in errors:
+        st.markdown(f"- **{issue.location}** — {issue.message}")
+
+    with st.expander("Technical details", expanded=False):
+        st.code("\n".join(issue.technical_detail for issue in errors))
 
 
 
@@ -1033,7 +1185,7 @@ def render_model_editor(
 
     safe_title = (doc.get("title") or "model").lower().replace(" ", "_")
 
-    _render_import_section(doc)
+    _render_import_section(doc, source_label)
 
     tab_meta, tab_params, tab_eqs, tab_scenarios, tab_report, tab_presets = st.tabs(
         ["Metadata", "Parameters", "Equations", "Scenarios", "Report", "Presets"]
