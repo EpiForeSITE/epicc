@@ -51,6 +51,7 @@ def simple_model_def():
                 compute="eq_subtotal + eq_tax",
             ),
         },
+        groups=["unit_cost", "quantity"],
         scenarios=[
             Scenario(
                 id="low_tax",
@@ -212,6 +213,7 @@ class TestErrorHandling:
             description="Has bad equation",
             parameters={"x": Parameter(type="number", label="X", default=1.0)},
             equations={"bad": Equation(label="Bad", compute="1 + (2")},
+            groups=["x"],
             scenarios=[Scenario(id="s1", label="S1", vars=ScenarioVars())],
             report=[TableBlock(type="table", rows=[TableRow(label="Bad", value="bad")])],
         )
@@ -229,6 +231,7 @@ class TestErrorHandling:
                 "a": Equation(label="A", compute="b + 1"),
                 "b": Equation(label="B", compute="a + 1"),
             },
+            groups=[],
             scenarios=[Scenario(id="s1", label="S1", vars=ScenarioVars())],
             report=[TableBlock(type="table", rows=[TableRow(label="A", value="a")])],
         )
@@ -250,6 +253,7 @@ class TestGraphBlocks:
                 "a": Equation(label="A", compute="x * 2"),
                 "b": Equation(label="B", compute="x * 3"),
             },
+            groups=["x"],
             scenarios=[
                 Scenario(id="s1", label="Scenario 1", vars=ScenarioVars(factor=1)),
                 Scenario(id="s2", label="Scenario 2", vars=ScenarioVars(factor=2)),

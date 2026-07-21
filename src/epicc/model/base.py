@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from epicc.model.schema import Parameter, Scenario
+    from epicc.model.schema import Parameter, Preset, Scenario
 
 ParamsT = TypeVar("ParamsT", bound=BaseModel)
 
@@ -56,9 +56,9 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
         return None
 
     @property
-    def parameter_groups(self) -> list | None:
-        """Optional parameter group tree for visual organization in the UI."""
-        return None
+    @abstractmethod
+    def parameter_groups(self) -> list:
+        ...
 
     @property
     def scenario_parameter_specs(self) -> dict[str, Parameter] | None:
@@ -68,6 +68,10 @@ class BaseSimulationModel(ABC, Generic[ParamsT]):
     @property
     def default_scenarios(self) -> list[Scenario] | None:
         """Default scenarios for this model, if any."""
+        return None
+
+    @property
+    def presets(self) -> list["Preset"] | None:
         return None
 
     def get_model_definition(self) -> Any:

@@ -10,6 +10,10 @@ from epicc.ui.export import (
     render_pdf_export_button,
     trigger_print_if_requested,
 )
+from epicc.ui.model_loader import (
+    consume_pending_model_selection,
+    render_load_model_button,
+)
 from epicc.ui.parameters import (
     build_typed_params,
     render_sidebar_parameters,
@@ -19,8 +23,9 @@ from epicc.ui.parameters import (
 )
 from epicc.ui.report import get_report_renderer
 from epicc.ui.state import (
-    has_results,
+    get_custom_models,
     get_run_output,
+    has_results,
     initialize_state,
     set_run_output,
     sync_active_model,
@@ -33,16 +38,27 @@ initialize_state()
 
 all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
+model_registry.update(get_custom_models())
 
-hdr_title, hdr_model = st.columns([3, 3])
+_MODEL_SELECT_KEY = "model_selector"
+pending_label = consume_pending_model_selection()
+if pending_label is not None and pending_label in model_registry:
+    st.session_state[_MODEL_SELECT_KEY] = pending_label
+
+hdr_title, hdr_right = st.columns([3, 3])
 hdr_title.title("EPICC Cost Calculator")
-selected_label: str | None = hdr_model.selectbox(
-    "Model",
-    list(model_registry),
-    index=None,
-    placeholder="Select a model...",
-    label_visibility="collapsed",
-)
+
+with hdr_right:
+    col_model, col_load = st.columns([5, 1], vertical_alignment="center")
+    selected_label: str | None = col_model.selectbox(
+        "Model",
+        list(model_registry),
+        key=_MODEL_SELECT_KEY,
+        index=None,
+        placeholder="Select a model...",
+        label_visibility="collapsed",
+    )
+    render_load_model_button(container=col_load)
 
 st.divider()
 
@@ -95,8 +111,8 @@ params = sync_active_model(selected_label)
 param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
-    params, scenario_overrides, model_defaults_flat, has_input_errors = render_sidebar_parameters(
-        active_model, selected_label, params, container=param_col
+    params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = render_sidebar_parameters(
+        active_model, selected_label, params, container=param_col,
     )
 
     typed_params = None
@@ -107,11 +123,26 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    # Reset Parameters button
+    btn_col1, btn_col2 = st.columns(2)
+
+    with btn_col1:
+        if typed_params is not None:
+            render_parameter_export_modal(
+                active_model.human_name(),
+                typed_params.model_dump(),
+                label="Save Changes as Preset",
+                disabled=not is_dirty,
+                pydantic_model=type(typed_params),
+                container=btn_col1,
+            )
+        else:
+            st.button("Save Changes as Preset", disabled=True, use_container_width=True)
+
     def _handle_reset() -> None:
-        model_label = cast(str, selected_label)  # Safe because we checked above
+        model_label = cast(str, selected_label)  # Safe: checked above
         reset_parameters_to_defaults(
-            model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
+            model_defaults_flat, params, model_label,
+            param_specs=active_model.parameter_specs,
         )
         default_scenarios = active_model.default_scenarios
         if default_scenarios:
@@ -121,37 +152,16 @@ with param_col:
                 active_model.scenario_parameter_specs or {},
             )
 
-    # Force both controls into the same keyed row for CSS alignment
-    with st.container(key="param-actions-row"):
-        button_col1, button_col2 = st.columns(2, gap="small", vertical_alignment="top")
-
-        button_col1.button(
-            "Reset Parameters",
-            on_click=_handle_reset,
-            use_container_width=True,
-        )
-
-        if typed_params is not None:
-            render_parameter_export_modal(
-                active_model.human_name(),
-                typed_params.model_dump(),
-                pydantic_model=type(typed_params),
-                container=button_col2,
-            )
-        else:
-            button_col2.button(
-                "Save Parameters",
-                disabled=True,
-                use_container_width=True,
-                help="Fix parameter errors first",
-            )
+    btn_col2.button(
+        "Reset to Preset",
+        on_click=_handle_reset,
+        use_container_width=True,
+        disabled=not is_dirty,
+    )
 
     st.divider()
     run_clicked = st.button(
-        "Run Simulation",
-        disabled=has_input_errors,
-        use_container_width=True,
-        type="primary",
+        "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
     )
 
 with result_col:
@@ -172,7 +182,7 @@ with result_col:
     renderer = get_report_renderer(active_model)
     _HINT = "This report has not been filled, since your simulation has not been run. Run the simulation to see the results here."
 
-    with st.container(key='results-report'):
+    with st.container(key="results-report"):
         if has_results():
             renderer.render(get_run_output())
         else:
