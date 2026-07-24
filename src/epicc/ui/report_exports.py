@@ -16,15 +16,15 @@ def build_report_payload(
     """Build a shared structured report payload for DOCX/PDF exports."""
     model_def = model.get_model_definition()
     scenario_results: dict[str, dict[str, Any]] = run_output.get("scenario_results_by_id", {})
-    label_overrides = run_output.get("label_overrides", {})
+    label_overrides: dict[str, str] = run_output.get("label_overrides", {}) 
+    scenarios = run_output.get("scenarios", getattr(model_def, "scenarios", []) or [])
 
     scenario_labels: dict[str, str] = {}
-    for s in getattr(model_def, "scenarios", []) or []:
+    for s in scenarios or []:
         sid = getattr(s, "id", None)
         lbl = getattr(s, "label", None)
         if sid:
             scenario_labels[sid] = label_overrides.get(sid, lbl or sid)
-
     sections: list[dict[str, Any]] = []
     for item in getattr(model_def, "report", []) or []:
         kind = getattr(item, "type", None)
@@ -38,7 +38,13 @@ def build_report_payload(
             if item_columns:
                 selected_scenario_ids = [sid for sid in item_columns if sid in scenario_results]
             else:
-                selected_scenario_ids = list(scenario_results.keys())
+                selected_scenario_ids = [
+                    getattr(s, "id", None)
+                    for s in scenarios or []
+                    if getattr(s, "id", None) in scenario_results
+                ]
+                if not selected_scenario_ids:
+                    selected_scenario_ids = list(scenario_results.keys())
 
             rows_out: list[dict[str, Any]] = []
             for r in getattr(item, "rows", []) or []:
