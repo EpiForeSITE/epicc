@@ -122,6 +122,8 @@ def trigger_print_if_requested() -> None:
     if not has_results():
         st.session_state[_PRINT_REQUESTED_KEY] = False
         return
+    
+    trigger_token = st.session_state.get(_PRINT_TOKEN_KEY, 0)
 
     raw_js = "(function(){ window.print(); })();"
     js64 = base64.b64encode(raw_js.encode("utf-8")).decode("utf-8")
