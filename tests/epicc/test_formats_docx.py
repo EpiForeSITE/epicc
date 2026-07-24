@@ -39,8 +39,6 @@ def _make_report_payload(title: str = "Test Report") -> dict:
 def test_write_produces_valid_zip():
     result = build_report_docx_bytes(_make_report_payload())
     assert isinstance(result, bytes)
-    with ZipFile.__new__(ZipFile) as _:
-        pass
     from io import BytesIO
     with ZipFile(BytesIO(result)) as zf:
         names = zf.namelist()
