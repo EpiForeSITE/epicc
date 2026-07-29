@@ -124,6 +124,25 @@ def trigger_print_if_requested() -> None:
         return
     
     trigger_token = st.session_state.get(_PRINT_TOKEN_KEY, 0)
+    
+    # What the hell is this, Streamlit? Why can't I just run JS without this nonsense? Yes, I know
+    # you don't want me to mess with your UI, but I just want to trigger the browser print dialog,
+    # is that really so bad? I even told you it was okay to run unsafe JS, but no, you had to run
+    # it through some weird sanitizer anyways.
+    #
+    # What's worse is that you silently drop that JS which fails your mysterious security checks
+    # instead of throwing an error, leaving me to waste hours debugging why my print button doesn't
+    # work at all. So here we are, base64 encoding the JS and evaling it in the browser, just to get
+    # around your broken injection system. I hope you're proud of yourselves.
+    # 
+    # Seriously!?!? This works?
+    #
+    # This is an alternative implementation to something like:
+    #
+    #   https://github.com/thunderbug1/streamlit-javascript
+    #
+    # Which would have a mess build-wise. As far as I know, I'm the first person to come up with this
+    # workaround, so I'm claiming it as my own invention! Don't tell Streamlit.
 
     raw_js = "(function(){ window.print(); })();"
     js64 = base64.b64encode(raw_js.encode("utf-8")).decode("utf-8")
