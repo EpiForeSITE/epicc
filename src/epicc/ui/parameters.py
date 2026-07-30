@@ -425,7 +425,14 @@ def _render_scenario_editor(
 
             # Label input
             lbl_key = _scenario_label_key(model_key, i)
-            st.text_input("Label", key=lbl_key)
+            default_label = (
+                default_scenarios[i].label
+                if i < len(default_scenarios)
+                else f"Scenario {i + 1}"
+            )
+            st.text_input(
+                "Label", value=st.session_state.get(lbl_key, default_label), key=lbl_key
+            )
 
             # Variable inputs (using the same typed widgets as parameters)
             for var_name, spec in specs.items():

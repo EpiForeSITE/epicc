@@ -40,9 +40,37 @@ def _doc() -> dict[str, Any]:
     return st.session_state[_DOC_KEY]
 
 
+_WIDGET_KEY_PREFIXES = (
+    "author_",
+    "block_",
+    "eq_",
+    "grp_",
+    "param_",
+    "preset_",
+    "scen_",
+    "new_",
+)
+
+
+def _clear_widget_state() -> None:
+    """Drop cached per-field widget values from a previous document.
+
+    Widgets below are keyed by list index (e.g. ``scen_label_0``) and pass a
+    fresh ``value=`` on every render, but Streamlit ignores ``value`` once a
+    key already exists in session-state. Without this, switching documents
+    (a new model, a fresh upload, "Reset to blank") leaves stale values
+    attached to those indices, which then show up as repeated/incorrect
+    labels for the new document's items.
+    """
+    for key in list(st.session_state.keys()):
+        if isinstance(key, str) and key.startswith(_WIDGET_KEY_PREFIXES):
+            del st.session_state[key]
+
+
 def _set_doc(doc: dict[str, Any], source_label: str | None = None) -> None:
     st.session_state[_DOC_KEY] = doc
     st.session_state[_SOURCE_KEY] = source_label
+    _clear_widget_state()
 
 
 def _init_state(
@@ -59,10 +87,10 @@ def _init_state(
     if _DOC_KEY not in st.session_state or (
         source_label is not None and current_source != source_label
     ):
-        st.session_state[_DOC_KEY] = (
-            deepcopy(initial_doc) if initial_doc is not None else deepcopy(_BLANK)
+        _set_doc(
+            deepcopy(initial_doc) if initial_doc is not None else deepcopy(_BLANK),
+            source_label=source_label,
         )
-        st.session_state[_SOURCE_KEY] = source_label
 
 
 
