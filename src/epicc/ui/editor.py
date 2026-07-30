@@ -17,6 +17,8 @@ from epicc.model.schema import Model
 _DOC_KEY = "editor_doc"
 _SOURCE_KEY = "editor_source_label"
 _WELCOME_SEEN_KEY = "editor_welcome_seen"
+_ADD_FORM_REVISION_KEY = "editor_add_form_revision"
+_GROUP_EDITOR_EXPANDED_KEY = "editor_group_editor_expanded"
 
 
 _BLANK: dict[str, Any] = {
@@ -138,12 +140,12 @@ def get_current_doc() -> dict[str, Any] | None:
     return st.session_state.get(_DOC_KEY)
 
 
-def validate_doc(doc: dict[str, Any]) -> Model | list[str]:
+def validate_doc(doc: dict[str, Any]) -> Model | list[ValidationIssue]:
     """Public wrapper around the editor's document validation."""
     return _validate(doc)
 
 
-def _validate(doc: dict[str, Any]) -> Model | list[str]:
+def _validate(doc: dict[str, Any]) -> Model | list[ValidationIssue]:
     """Return a validated ``Model`` or a list of human-readable error strings."""
     try:
         return opaque_to_typed(doc, Model)

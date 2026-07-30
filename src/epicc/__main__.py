@@ -96,7 +96,6 @@ with hdr_right:
     )
     render_load_model_button(container=col_load)
 
-<<<<<<< HEAD
 in_editor = selected_label is not None and bool(st.session_state.get(_EDITOR_MODE_KEY))
 if in_editor:
     try_button_slot = hdr_editor.empty()
@@ -108,20 +107,6 @@ elif selected_label is not None:
     ):
         st.session_state[_EDITOR_MODE_KEY] = True
         st.rerun()
-=======
-in_editor = bool(st.session_state.get(_EDITOR_MODE_KEY))
-btn_label = "Abort to Calculator" if in_editor else "Open Model Editor"
-if hdr_editor.button(
-    btn_label,
-    use_container_width=True,
-    key="open_editor_btn",
-):
-    if in_editor:
-        st.session_state.pop(_EDITOR_MODE_KEY, None)
-    else:
-        st.session_state[_EDITOR_MODE_KEY] = True
-    st.rerun()
->>>>>>> ae98a5815e8556ba1553250df08a0894d8ec8031
 
 st.divider()
 
@@ -217,7 +202,7 @@ if st.session_state.get(_EDITOR_MODE_KEY):
 preview_model = st.session_state.get(_PREVIEW_MODEL_KEY)
 preview_label = st.session_state.get(_PREVIEW_LABEL_KEY)
 using_preview = preview_model is not None and preview_label == selected_label
-if using_preview:
+if using_preview and preview_model is not None:
     active_model = preview_model
     st.warning(
         "You're trying an unsaved, edited version of this model. Nothing is saved yet."
