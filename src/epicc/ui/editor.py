@@ -1099,7 +1099,7 @@ def render_model_editor(
     try:
         yaml_bytes = _build_yaml_bytes(doc)
         export_col.download_button(
-            label="Export YAML",
+            label="Export as Model File",
             data=yaml_bytes,
             file_name=f"{safe_title}.yaml",
             mime=_YAML_MIME,
