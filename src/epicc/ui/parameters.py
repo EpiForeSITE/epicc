@@ -446,7 +446,7 @@ def _render_scenario_editor(
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button(
-                "➕ Add Scenario",
+                "Add Scenario",
                 disabled=count >= _MAX_SCENARIOS,
                 key=f"{model_key}__add_scen",
             ):
@@ -464,7 +464,7 @@ def _render_scenario_editor(
                 st.rerun()
         with btn_col2:
             if st.button(
-                "➖ Remove Scenario",
+                "Remove Scenario",
                 disabled=count <= _MIN_SCENARIOS,
                 key=f"{model_key}__rm_scen",
             ):
