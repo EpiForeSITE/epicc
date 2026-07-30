@@ -96,6 +96,7 @@ with hdr_right:
     )
     render_load_model_button(container=col_load)
 
+<<<<<<< HEAD
 in_editor = selected_label is not None and bool(st.session_state.get(_EDITOR_MODE_KEY))
 if in_editor:
     try_button_slot = hdr_editor.empty()
@@ -107,10 +108,35 @@ elif selected_label is not None:
     ):
         st.session_state[_EDITOR_MODE_KEY] = True
         st.rerun()
+=======
+in_editor = bool(st.session_state.get(_EDITOR_MODE_KEY))
+btn_label = "Abort to Calculator" if in_editor else "Open Model Editor"
+if hdr_editor.button(
+    btn_label,
+    use_container_width=True,
+    key="open_editor_btn",
+):
+    if in_editor:
+        st.session_state.pop(_EDITOR_MODE_KEY, None)
+    else:
+        st.session_state[_EDITOR_MODE_KEY] = True
+    st.rerun()
+>>>>>>> ae98a5815e8556ba1553250df08a0894d8ec8031
 
 st.divider()
 
 if selected_label is None:
+    if in_editor:
+        def _close_editor() -> None:
+            st.session_state.pop(_EDITOR_MODE_KEY, None)
+
+        render_model_editor(
+            initial_doc=None,
+            source_label=None,
+            on_close=_close_editor,
+        )
+        st.stop()
+
     st.markdown(
         """
 ## Welcome to EPICC
