@@ -4,8 +4,11 @@ import streamlit as st
 from pydantic import ValidationError
 
 from epicc.model.base import BaseSimulationModel
+from epicc.model.factory import create_model_instance
 from epicc.model.models import get_all_models
-from epicc.ui.editor import render_model_editor
+from epicc.model.parameters import load_model_params
+from epicc.model.schema import Model
+from epicc.ui.editor import get_current_doc, render_model_editor, validate_doc
 from epicc.ui.export import (
     render_parameter_export_modal,
     render_pdf_export_button,
@@ -43,6 +46,37 @@ model_registry.update(get_custom_models())
 
 _EDITOR_MODE_KEY = "epicc_editor_mode"
 _MODEL_SELECT_KEY = "model_selector"
+_PREVIEW_MODEL_KEY = "epicc_editor_preview_model"
+_PREVIEW_LABEL_KEY = "epicc_editor_preview_label"
+
+
+def _activate_preview(model_label: str) -> bool:
+    """Compile the in-progress editor doc and switch the Calculator to it.
+
+    Returns False (and leaves the editor open) if the doc doesn't validate.
+    """
+    doc = get_current_doc()
+    result = validate_doc(doc) if doc is not None else None
+    if not isinstance(result, Model):
+        return False
+    preview_model = create_model_instance(result)
+    st.session_state[_PREVIEW_MODEL_KEY] = preview_model
+    st.session_state[_PREVIEW_LABEL_KEY] = model_label
+    model_defaults = load_model_params(preview_model)
+    reset_parameters_to_defaults(
+        model_defaults, {}, model_label, param_specs=preview_model.parameter_specs
+    )
+    default_scenarios = preview_model.default_scenarios
+    if default_scenarios:
+        reset_scenario_state(
+            model_label, default_scenarios, preview_model.scenario_parameter_specs or {}
+        )
+    return True
+
+
+def _discard_preview() -> None:
+    st.session_state.pop(_PREVIEW_MODEL_KEY, None)
+    st.session_state.pop(_PREVIEW_LABEL_KEY, None)
 pending_label = consume_pending_model_selection()
 if pending_label is not None and pending_label in model_registry:
     st.session_state[_MODEL_SELECT_KEY] = pending_label
@@ -62,18 +96,16 @@ with hdr_right:
     )
     render_load_model_button(container=col_load)
 
-if selected_label is not None:
-    in_editor = bool(st.session_state.get(_EDITOR_MODE_KEY))
-    btn_label = "Abort to Calculator" if in_editor else "Open Model Editor"
+in_editor = selected_label is not None and bool(st.session_state.get(_EDITOR_MODE_KEY))
+if in_editor:
+    try_button_slot = hdr_editor.empty()
+elif selected_label is not None:
     if hdr_editor.button(
-        btn_label,
+        "Open Model Editor",
         use_container_width=True,
         key="open_editor_btn",
     ):
-        if in_editor:
-            st.session_state.pop(_EDITOR_MODE_KEY, None)
-        else:
-            st.session_state[_EDITOR_MODE_KEY] = True
+        st.session_state[_EDITOR_MODE_KEY] = True
         st.rerun()
 
 st.divider()
@@ -129,13 +161,41 @@ if st.session_state.get(_EDITOR_MODE_KEY):
 
     def _close_editor() -> None:
         st.session_state.pop(_EDITOR_MODE_KEY, None)
+        _discard_preview()
 
     render_model_editor(
         initial_doc=initial_doc,
         source_label=selected_label,
         on_close=_close_editor,
     )
+
+    doc = get_current_doc()
+    can_try = isinstance(validate_doc(doc), Model) if doc is not None else False
+    if try_button_slot.button(
+        "Try in Calculator",
+        use_container_width=True,
+        key="try_in_calculator_btn",
+        disabled=not can_try,
+        help=(
+            "Try your in-progress changes in the Calculator. Nothing is saved."
+            if can_try
+            else "Fix the validation errors below before trying this model."
+        ),
+    ):
+        if _activate_preview(selected_label):
+            st.session_state.pop(_EDITOR_MODE_KEY, None)
+            st.rerun()
+
     st.stop()
+
+preview_model = st.session_state.get(_PREVIEW_MODEL_KEY)
+preview_label = st.session_state.get(_PREVIEW_LABEL_KEY)
+using_preview = preview_model is not None and preview_label == selected_label
+if using_preview:
+    active_model = preview_model
+    st.warning(
+        "You're trying an unsaved, edited version of this model. Nothing is saved yet."
+    )
 
 params = sync_active_model(selected_label)
 

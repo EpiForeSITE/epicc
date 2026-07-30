@@ -96,6 +96,16 @@ def _init_state(
 
 
 
+def get_current_doc() -> dict[str, Any] | None:
+    """Return the in-progress editor document, if the editor has been opened."""
+    return st.session_state.get(_DOC_KEY)
+
+
+def validate_doc(doc: dict[str, Any]) -> Model | list[str]:
+    """Public wrapper around the editor's document validation."""
+    return _validate(doc)
+
+
 def _validate(doc: dict[str, Any]) -> Model | list[str]:
     """Return a validated ``Model`` or a list of human-readable error strings."""
     try:
@@ -1070,6 +1080,7 @@ def render_model_editor(
             title). Used to detect model switches so the doc can be refreshed.
             Pass ``None`` when opening a blank editor.
         on_close: Zero-argument callable invoked when the user clicks Cancel,
+            after the in-progress document has been discarded,
             e.g. ``lambda: st.session_state.pop('editor_mode')``.
     """
     _init_state(initial_doc=initial_doc, source_label=source_label)
@@ -1117,7 +1128,15 @@ def render_model_editor(
     export_col: Any = st
     if on_close is not None:
         cancel_col, export_col = st.columns([1, 3])
-        if cancel_col.button("Cancel", use_container_width=True, key="editor_cancel"):
+        if cancel_col.button(
+            "Cancel",
+            use_container_width=True,
+            key="editor_cancel",
+            help="Discard your changes and return to the Calculator.",
+        ):
+            st.session_state.pop(_DOC_KEY, None)
+            st.session_state.pop(_SOURCE_KEY, None)
+            _clear_widget_state()
             on_close()
             st.rerun()
 
