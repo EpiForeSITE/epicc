@@ -15,6 +15,7 @@ from epicc.model.schema import Model
 
 _DOC_KEY = "editor_doc"
 _SOURCE_KEY = "editor_source_label"
+_WELCOME_SEEN_KEY = "editor_welcome_seen"
 
 
 _BLANK: dict[str, Any] = {
@@ -1032,6 +1033,26 @@ def _build_yaml_bytes(doc: dict[str, Any]) -> bytes:
     return fmt.write(doc)
 
 
+@st.dialog("Welcome to the Model Editor")
+def _render_welcome_dialog() -> None:
+    st.markdown(
+        """
+The **Model Editor** lets you build or modify an EPICC model definition directly
+in the browser: metadata, parameters, equations, scenarios, report layout, and
+presets.
+
+- Changes here only affect this in-progress document — nothing is saved until
+  you export it as a model file.
+- Use **Cancel** at any point to return to the Calculator without exporting.
+- You can load an existing model file to start from, or reset to a blank model.
+
+"""
+    )
+    if st.button("Got it", type="primary", key="editor_welcome_dismiss"):
+        st.session_state[_WELCOME_SEEN_KEY] = True
+        st.rerun()
+
+
 
 
 def render_model_editor(
@@ -1052,6 +1073,10 @@ def render_model_editor(
             e.g. ``lambda: st.session_state.pop('editor_mode')``.
     """
     _init_state(initial_doc=initial_doc, source_label=source_label)
+
+    if not st.session_state.get(_WELCOME_SEEN_KEY):
+        _render_welcome_dialog()
+
     doc = _doc()
 
     # Run validation every render so results are available for both the header
