@@ -123,7 +123,9 @@ with param_col:
             render_validation_error(selected_label, exc, container=param_col)
             has_input_errors = True
 
-    btn_col1, btn_col2 = st.columns(2)
+    # Keep both preset actions in the same keyed row so sidebar CSS can align them.
+    with st.container(key="param-actions-row"):
+        btn_col1, btn_col2 = st.columns(2, gap="small", vertical_alignment="top")
 
     with btn_col1:
         if typed_params is not None:
