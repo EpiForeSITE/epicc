@@ -35,6 +35,7 @@ from epicc.ui.state import (
     sync_active_model,
 )
 from epicc.ui.styles import load_styles
+from epicc.ui.url_params import read_url_params, write_url_params
 
 st.set_page_config(page_title="EPICC Cost Calculator", layout="wide")
 load_styles()
@@ -43,6 +44,21 @@ initialize_state()
 all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 model_registry.update(get_custom_models())
+
+# Restore model selection and parameters from URL query string on first load.
+_URL_APPLIED_KEY = "_url_params_applied"
+if not st.session_state.get(_URL_APPLIED_KEY):
+    _url_result = read_url_params()
+    if _url_result is not None:
+        _url_model, _url_values = _url_result
+        if _url_model in model_registry:
+            st.session_state[_URL_APPLIED_KEY] = True
+            st.session_state["model_selector"] = _url_model
+            # Trigger model activation so params dict is ready
+            sync_active_model(_url_model)
+            st.session_state["params"].update(_url_values)
+    else:
+        st.session_state[_URL_APPLIED_KEY] = True
 
 _EDITOR_MODE_KEY = "epicc_editor_mode"
 _MODEL_SELECT_KEY = "model_selector"
@@ -216,6 +232,9 @@ with param_col:
     params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = render_sidebar_parameters(
         active_model, selected_label, params, container=param_col,
     )
+
+    # Keep the URL in sync with current parameter values.
+    write_url_params(selected_label, params)
 
     typed_params = None
     if not has_input_errors:
