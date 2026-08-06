@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import html
 from typing import Any
 
 import uuid
@@ -23,12 +24,15 @@ from epicc.model.schema import (
 def _callout(summary: str, detail: str | None = None) -> None:
     """A muted informational callout used for skeletons and errors."""
 
-    detail_html = (
-        f"<br><span class='report-callout__detail'>{detail}</span>" if detail else ""
-    )
+    safe_summary = html.escape(summary)
+    detail_html = ""
+    if detail:
+        detail_html = (
+            f"<br><span class='report-callout__detail'>{html.escape(detail)}</span>"
+        )
 
     st.markdown(
-        f"<div class='report-callout'>{summary}{detail_html}</div>",
+        f"<div class='report-callout'>{safe_summary}{detail_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -175,13 +179,15 @@ class GraphBlockRenderer(BlockRenderer):
         with st.container(key=f"graph-block-{self._uuid}"):
             if self._block.title:
                 st.markdown(
-                    f"<div class='report-graph-title'>{self._block.title}</div>",
+                    f"<div class='report-graph-title'>"
+                    f"{html.escape(self._block.title)}</div>",
                     unsafe_allow_html=True,
                 )
 
             if self._block.caption:
                 st.markdown(
-                    f"<div class='report-graph-caption'>{self._block.caption}</div>",
+                    f"<div class='report-graph-caption'>"
+                    f"{html.escape(self._block.caption)}</div>",
                     unsafe_allow_html=True,
                 )
 

@@ -1,6 +1,9 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
+
+
+HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
 
 
 class AppConfig(BaseModel):
@@ -48,19 +51,18 @@ class LogoConfig(BaseModel):
 class BrandColorsConfig(BaseModel):
     """Semantic color tokens used by the web interface."""
 
-    primary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    on_primary: str = Field(
+    primary: HexColor
+    on_primary: HexColor = Field(
         default="#FFFFFF",
-        pattern=r"^#[0-9A-Fa-f]{6}$",
         description="Text and icon color displayed on the primary color.",
     )
-    accent: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    muted_text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    canvas: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    surface: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    border: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    chart_palette: list[str] = Field(
+    accent: HexColor
+    text: HexColor
+    muted_text: HexColor
+    canvas: HexColor
+    surface: HexColor
+    border: HexColor
+    chart_palette: list[HexColor] = Field(
         min_length=1,
         description="Ordered colors for report charts.",
     )

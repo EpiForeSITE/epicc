@@ -44,9 +44,8 @@ def load_styles(brand: BrandConfig) -> None:
         importlib.resources.files("epicc").joinpath("js/theme_sync.js").open("rb") as f
     ):
         theme_sync = f.read().decode("utf-8")
-    theme_sync64 = base64.b64encode(theme_sync.encode()).decode()
     st.html(
-        f"<script>eval(atob('{theme_sync64}'))</script>",
+        f"<script>{theme_sync}</script>",
         unsafe_allow_javascript=True,
     )
 
