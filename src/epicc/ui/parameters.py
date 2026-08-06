@@ -12,6 +12,7 @@ from epicc.model.base import BaseSimulationModel
 from epicc.model.parameters import load_model_params, parse_preset_from_file
 from epicc.model.schema import Preset, Scenario, ScenarioVars
 from epicc.ui.state import (
+    DEFAULT_PARAM_IDENTITY,
     clear_results,
     get_active_param_identity,
     reset_params,
@@ -721,7 +722,7 @@ def render_sidebar_parameters(
             file_hash_in_stack,
         )
     else:
-        param_identity = ("default", None, 0, None)
+        param_identity = DEFAULT_PARAM_IDENTITY
 
     should_refresh = False
     if get_active_param_identity() != param_identity:
