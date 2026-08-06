@@ -3,6 +3,7 @@ from typing import cast
 import streamlit as st
 from pydantic import ValidationError
 
+from epicc.config import CONFIG
 from epicc.model.base import BaseSimulationModel
 from epicc.model.factory import create_model_instance
 from epicc.model.models import get_all_models
@@ -36,11 +37,11 @@ from epicc.ui.state import (
     set_active_param_identity,
     sync_active_model,
 )
-from epicc.ui.styles import load_styles
+from epicc.ui.styles import load_styles, render_brand_header
 from epicc.ui.url_params import read_url_params, write_url_params
 
-st.set_page_config(page_title="EPICC Cost Calculator", layout="wide")
-load_styles()
+st.set_page_config(page_title=CONFIG.app.title, layout="wide")
+load_styles(CONFIG.brand)
 initialize_state()
 
 all_models = get_all_models()
@@ -108,15 +109,17 @@ def _activate_preview(model_label: str) -> bool:
 def _discard_preview() -> None:
     st.session_state.pop(_PREVIEW_MODEL_KEY, None)
     st.session_state.pop(_PREVIEW_LABEL_KEY, None)
+
+
 pending_label = consume_pending_model_selection()
 if pending_label is not None and pending_label in model_registry:
     st.session_state[_MODEL_SELECT_KEY] = pending_label
 
-hdr_title, hdr_right, hdr_editor = st.columns([3, 3, 1])
-hdr_title.title("EPICC Cost Calculator")
+hdr_title, hdr_right, hdr_editor = st.columns([3, 3, 1.25])
+render_brand_header(CONFIG.brand, CONFIG.app.title, container=hdr_title)
 
 with hdr_right:
-    col_model, col_load = st.columns([5, 1], vertical_alignment="center")
+    col_model, col_load = st.columns([4, 1], vertical_alignment="center")
     selected_label: str | None = col_model.selectbox(
         "Model",
         list(model_registry),
@@ -143,6 +146,7 @@ st.divider()
 
 if selected_label is None:
     if in_editor:
+
         def _close_editor() -> None:
             st.session_state.pop(_EDITOR_MODE_KEY, None)
 
@@ -244,61 +248,73 @@ params = sync_active_model(selected_label)
 param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
-    params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = render_sidebar_parameters(
-        active_model, selected_label, params, container=param_col,
-    )
-
-    # Keep the URL in sync with current parameter values.
-    write_url_params(selected_label, params, scenario_overrides)
-
-    typed_params = None
-    if not has_input_errors:
-        try:
-            typed_params = build_typed_params(active_model, model_defaults_flat, params)
-        except ValidationError as exc:
-            render_validation_error(selected_label, exc, container=param_col)
-            has_input_errors = True
-
-    btn_col1, btn_col2 = st.columns(2)
-
-    with btn_col1:
-        if typed_params is not None:
-            render_parameter_export_modal(
-                active_model.human_name(),
-                typed_params.model_dump(),
-                label="Save Changes as Preset",
-                disabled=not is_dirty,
-                pydantic_model=type(typed_params),
-                container=btn_col1,
+    with st.container(key="parameter-panel") as parameter_panel:
+        params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = (
+            render_sidebar_parameters(
+                active_model,
+                selected_label,
+                params,
+                container=parameter_panel,
             )
-        else:
-            st.button("Save Changes as Preset", disabled=True, use_container_width=True)
-
-    def _handle_reset() -> None:
-        model_label = cast(str, selected_label)  # Safe: checked above
-        reset_parameters_to_defaults(
-            model_defaults_flat, params, model_label,
-            param_specs=active_model.parameter_specs,
         )
-        default_scenarios = active_model.default_scenarios
-        if default_scenarios:
-            reset_scenario_state(
+
+        # Keep the URL in sync with current parameter values.
+        write_url_params(selected_label, params, scenario_overrides)
+
+        typed_params = None
+        if not has_input_errors:
+            try:
+                typed_params = build_typed_params(
+                    active_model, model_defaults_flat, params
+                )
+            except ValidationError as exc:
+                render_validation_error(selected_label, exc, container=parameter_panel)
+                has_input_errors = True
+
+        btn_col1, btn_col2 = st.columns(2)
+
+        with btn_col1:
+            if typed_params is not None:
+                render_parameter_export_modal(
+                    active_model.human_name(),
+                    typed_params.model_dump(),
+                    label="Save Changes as Preset",
+                    disabled=not is_dirty,
+                    pydantic_model=type(typed_params),
+                    container=btn_col1,
+                )
+            else:
+                st.button(
+                    "Save Changes as Preset", disabled=True, use_container_width=True
+                )
+
+        def _handle_reset() -> None:
+            model_label = cast(str, selected_label)  # Safe: checked above
+            reset_parameters_to_defaults(
+                model_defaults_flat,
+                params,
                 model_label,
-                default_scenarios,
-                active_model.scenario_parameter_specs or {},
+                param_specs=active_model.parameter_specs,
             )
+            default_scenarios = active_model.default_scenarios
+            if default_scenarios:
+                reset_scenario_state(
+                    model_label,
+                    default_scenarios,
+                    active_model.scenario_parameter_specs or {},
+                )
 
-    btn_col2.button(
-        "Reset to Preset",
-        on_click=_handle_reset,
-        use_container_width=True,
-        disabled=not is_dirty,
-    )
+        btn_col2.button(
+            "Reset to Preset",
+            on_click=_handle_reset,
+            use_container_width=True,
+            disabled=not is_dirty,
+        )
 
-    st.divider()
-    run_clicked = st.button(
-        "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
-    )
+        st.divider()
+        run_clicked = st.button(
+            "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
+        )
 
 with result_col:
     trigger_print_if_requested()
