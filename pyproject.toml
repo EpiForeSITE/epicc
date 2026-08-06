@@ -32,8 +32,9 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [tool.stlite]
-title = "EPICC Cost Calculator"
+title = "Epidemiological Cost Calculator (EPICC)"
 mount_dirs = ["src"]
 text_suffixes = [".py", ".yaml", ".yml", ".css", ".js", ".html"]
+binary_suffixes = [".png"]
 css_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css"
 js_url = "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js"

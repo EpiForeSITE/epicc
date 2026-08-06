@@ -26,3 +26,60 @@ https://epiworldpythonapp.streamlit.app/
 *(If the app is still deploying, it may take a few seconds to load.)*
 
 Please follow instructions in your console for loading development versions.
+
+## Branding and themes
+
+The app's identity is configured in
+[`src/epicc/config/default.yaml`](src/epicc/config/default.yaml). This keeps the
+application title, logos, font stack, and light/dark color palettes together in
+one YAML file.
+
+```yaml
+app:
+  title: Epidemiological Cost Calculator (EPICC)
+
+brand:
+  name: ForeSITE
+  font_family: '"Proxima Nova", "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif'
+  logo:
+    path: web/assets/foresite-primary-rgb.png
+    dark_path: web/assets/foresite-white-rgb.png
+    alt_text: ForeSITE logo
+    mime_type: image/png
+    width_px: 220
+  colors: # Light mode
+    primary: "#A60F2D"
+    on_primary: "#FFFFFF"
+    accent: "#FDB921"
+    text: "#4E4E4E"
+    muted_text: "#6B6E72"
+    canvas: "#F7F7F5"
+    surface: "#FFFFFF"
+    border: "#D9D9D6"
+    chart_palette: ["#A60F2D", "#FDB921", "#4E4E4E", "#6B6E72"]
+  dark_colors: # Dark mode
+    primary: "#FDB921"
+    on_primary: "#231F20"
+    accent: "#A60F2D"
+    text: "#F3F1ED"
+    muted_text: "#B8B3AD"
+    canvas: "#171717"
+    surface: "#242424"
+    border: "#4E4E4E"
+    chart_palette: ["#FDB921", "#A60F2D", "#F3F1ED", "#B8B3AD"]
+```
+
+`colors` controls the light palette and `dark_colors` controls the dark palette.
+Each needs the same semantic fields; `on_primary` is the text/icon color used on
+primary buttons. `dark_colors` and `logo.dark_path` are optional, so existing
+brand configurations continue to work and fall back to the light values.
+
+Visitors choose **System**, **Light**, or **Dark** from Streamlit's menu in the
+top-right corner. The app mirrors that choice automatically, including switching
+to `logo.dark_path` when dark mode is active.
+
+After changing branding, rebuild the static app before deployment:
+
+```bash
+make build
+```
