@@ -96,6 +96,16 @@ hr {
     padding-left: 1rem;
 }
 
+.brand-header__version {
+    color: var(--brand-muted-text);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
 /* Controls */
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div,
