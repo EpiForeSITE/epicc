@@ -1,0 +1,34 @@
+name: Publish Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify the tag matches the version in the source
+        run: |
+          source_version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/epicc/__init__.py)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$source_version" != "$tag_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match __version__ $source_version" >&2
+            echo "Run 'make bump' before tagging." >&2
+            exit 1
+          fi
+
+      - name: Publish the release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag

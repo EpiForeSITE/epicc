@@ -13,6 +13,11 @@ class AppConfig(BaseModel):
         description="Brief description of the application and its purpose."
     )
 
+    releases_url: str | None = Field(
+        default=None,
+        description="Link to the latest published release, shown as 'What's new'.",
+    )
+
 
 class DefaultsConfig(BaseModel):
     decimal_precision: int = Field(

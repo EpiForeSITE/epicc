@@ -63,6 +63,7 @@ def load_config(pyproject_path: Path) -> dict:
         "title": stlite_config["title"],
         "css_url": stlite_config["css_url"],
         "js_url": stlite_config["js_url"],
+        "version": pyproject.get("project", {}).get("version", ""),
     }
 
 
@@ -198,10 +199,12 @@ def build_loader_html(
     title: str,
     css_url: str,
     js_url: str,
+    version: str = "",
 ) -> str:
     title_html = html.escape(title, quote=True)
     css_html = html.escape(css_url, quote=True)
     js_json = json.dumps(js_url)
+    version_html = html.escape(version, quote=True)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -212,6 +215,7 @@ def build_loader_html(
     <meta name="description" content="Calculate and analyze epidemiological costs" />
     <meta name="keywords" content="epidemiology, cost calculator, public health, analysis" />
     <meta name="author" content="ForeSITE -- Forecasting and Surveillance of Infectious Threats and Epidemics" />
+    <meta name="version" content="{version_html}" />
 
     <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -322,6 +326,7 @@ def main():
         title=config["title"],
         css_url=config["css_url"],
         js_url=config["js_url"],
+        version=config["version"],
     )
 
     html_index_path.write_text(html_text, encoding="utf-8")
@@ -329,6 +334,7 @@ def main():
     # Success message
     size_kb = len(html_text.encode("utf-8")) / 1024
     print("\nCompleted build, yo!")
+    print(f"  Version: {config['version'] or 'unknown'}")
     print(f"  Output: {html_index_path.relative_to(project_root)}")
     print(f"  Size: {size_kb:.1f} KB")
     print(f"  Files mounted: {len(mounted_files)}")

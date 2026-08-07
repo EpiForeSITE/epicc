@@ -3,12 +3,14 @@ from typing import cast
 import streamlit as st
 from pydantic import ValidationError
 
+from epicc import __version__
 from epicc.config import CONFIG
 from epicc.model.base import BaseSimulationModel
 from epicc.model.factory import create_model_instance
 from epicc.model.models import get_all_models
 from epicc.model.parameters import load_model_params
 from epicc.model.schema import Model
+from epicc.ui.about import render_whats_new_button
 from epicc.ui.editor import get_current_doc, render_model_editor, validate_doc
 from epicc.ui.export import (
     render_parameter_export_modal,
@@ -116,7 +118,9 @@ if pending_label is not None and pending_label in model_registry:
     st.session_state[_MODEL_SELECT_KEY] = pending_label
 
 hdr_title, hdr_right, hdr_editor = st.columns([3, 3, 1.25])
-render_brand_header(CONFIG.brand, CONFIG.app.title, container=hdr_title)
+render_brand_header(
+    CONFIG.brand, CONFIG.app.title, version=__version__, container=hdr_title
+)
 
 with hdr_right:
     col_model, col_load = st.columns([4, 1], vertical_alignment="center")
@@ -141,6 +145,8 @@ elif selected_label is not None:
     ):
         st.session_state[_EDITOR_MODE_KEY] = True
         st.rerun()
+
+render_whats_new_button(CONFIG.app.releases_url, container=hdr_editor)
 
 st.divider()
 

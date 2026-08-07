@@ -25,7 +25,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]
 
 [tool.mypy]
 mypy_path = "src"

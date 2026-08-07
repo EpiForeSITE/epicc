@@ -50,7 +50,13 @@ def load_styles(brand: BrandConfig) -> None:
     )
 
 
-def render_brand_header(brand: BrandConfig, title: str, *, container: Any = st) -> None:
+def render_brand_header(
+    brand: BrandConfig,
+    title: str,
+    *,
+    version: str | None = None,
+    container: Any = st,
+) -> None:
     """Render a compact header using the configured logo artwork and title."""
     logo_resource = importlib.resources.files("epicc").joinpath(brand.logo.path)
     logo_data = base64.b64encode(logo_resource.read_bytes()).decode("ascii")
@@ -69,6 +75,12 @@ def render_brand_header(brand: BrandConfig, title: str, *, container: Any = st) 
                style="width: {brand.logo.width_px}px;" />
         """
 
+    version_badge = ""
+    if version:
+        version_badge = (
+            f'<span class="brand-header__version">v{html.escape(version)}</span>'
+        )
+
     container.markdown(
         f"""
         <div class="brand-header" aria-label="{html.escape(brand.name)}">
@@ -77,7 +89,7 @@ def render_brand_header(brand: BrandConfig, title: str, *, container: Any = st) 
                alt="{html.escape(brand.logo.alt_text)}"
                style="width: {brand.logo.width_px}px;" />
           {dark_logo}
-          <div class="brand-header__title">{html.escape(title)}</div>
+          <div class="brand-header__title">{html.escape(title)}{version_badge}</div>
         </div>
         """,
         unsafe_allow_html=True,
