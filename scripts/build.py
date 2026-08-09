@@ -59,13 +59,19 @@ def load_config(pyproject_path: Path) -> dict:
         "packages": packages,
         "mount_dirs": tuple(stlite_config["mount_dirs"]),
         "text_suffixes": tuple(stlite_config["text_suffixes"]),
+        "binary_suffixes": tuple(stlite_config.get("binary_suffixes", ())),
         "title": stlite_config["title"],
         "css_url": stlite_config["css_url"],
         "js_url": stlite_config["js_url"],
+        "version": pyproject.get("project", {}).get("version", ""),
     }
 
 
-def should_mount_file(path: Path, text_suffixes: tuple[str, ...]) -> bool:
+def should_mount_file(
+    path: Path,
+    text_suffixes: tuple[str, ...],
+    binary_suffixes: tuple[str, ...],
+) -> bool:
     if not path.is_file():
         return False
 
@@ -78,15 +84,16 @@ def should_mount_file(path: Path, text_suffixes: tuple[str, ...]) -> bool:
     if path.suffix in (".pyc", ".pyo"):
         return False
 
-    return path.suffix.lower() in text_suffixes
+    return path.suffix.lower() in text_suffixes + binary_suffixes
 
 
-def hash_content(content: str) -> str:
+def hash_content(content: str | bytes) -> str:
     """Bust those caches! Generate a short hash of the content (Python files) to bust browser caches."""
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    data = content.encode("utf-8") if isinstance(content, str) else content
+    return hashlib.sha256(data).hexdigest()
 
 
-def get_hashed_filename(path: str, content: str) -> str:
+def get_hashed_filename(path: str, content: str | bytes) -> str:
     """
     Examples:
         "app.py" + content -> "app.abc12345.py"
@@ -111,13 +118,14 @@ def collect_files(
     app_path: Path,
     mount_dirs: tuple[str, ...],
     text_suffixes: tuple[str, ...],
-) -> dict[str, str]:
+    binary_suffixes: tuple[str, ...],
+) -> dict[str, str | bytes]:
     """Collect source files to mount in the stlite virtual filesystem.
 
     Returns:
         dict mapping relative paths to file contents
     """
-    mounted_files: dict[str, str] = {}
+    mounted_files: dict[str, str | bytes] = {}
     files_to_mount: list[Path] = [app_path]
 
     # Scan configured directories, read, and then mount eligible files
@@ -127,12 +135,15 @@ def collect_files(
             files_to_mount.extend(sorted(directory.rglob("*")))
 
     for path in files_to_mount:
-        if not should_mount_file(path, text_suffixes):
+        if not should_mount_file(path, text_suffixes, binary_suffixes):
             continue
 
         try:
             relative_path = path.relative_to(project_root).as_posix()
-            mounted_files[relative_path] = path.read_text(encoding="utf-8")
+            if path.suffix.lower() in binary_suffixes:
+                mounted_files[relative_path] = path.read_bytes()
+            else:
+                mounted_files[relative_path] = path.read_text(encoding="utf-8")
         except Exception as e:
             print(f"warning: I could not read {path}: {e}", file=sys.stderr)
 
@@ -140,7 +151,7 @@ def collect_files(
 
 
 def write_source_files(
-    mounted_files: dict[str, str],
+    mounted_files: dict[str, str | bytes],
     output_dir: Path,
 ) -> dict[str, str]:
     """Write source files to output directory with content hashes."""
@@ -155,7 +166,10 @@ def write_source_files(
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write file
-        output_path.write_text(content, encoding="utf-8")
+        if isinstance(content, str):
+            output_path.write_text(content, encoding="utf-8")
+        else:
+            output_path.write_bytes(content)
 
         # Store mapping for config (relative to output_dir)
         url_path = f"./files/{hashed_path}"
@@ -185,10 +199,12 @@ def build_loader_html(
     title: str,
     css_url: str,
     js_url: str,
+    version: str = "",
 ) -> str:
     title_html = html.escape(title, quote=True)
     css_html = html.escape(css_url, quote=True)
     js_json = json.dumps(js_url)
+    version_html = html.escape(version, quote=True)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -199,6 +215,7 @@ def build_loader_html(
     <meta name="description" content="Calculate and analyze epidemiological costs" />
     <meta name="keywords" content="epidemiology, cost calculator, public health, analysis" />
     <meta name="author" content="ForeSITE -- Forecasting and Surveillance of Infectious Threats and Epidemics" />
+    <meta name="version" content="{version_html}" />
 
     <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -276,6 +293,7 @@ def main():
         app_path,
         config["mount_dirs"],
         config["text_suffixes"],
+        config["binary_suffixes"],
     )
 
     # Prepare output directory
@@ -308,6 +326,7 @@ def main():
         title=config["title"],
         css_url=config["css_url"],
         js_url=config["js_url"],
+        version=config["version"],
     )
 
     html_index_path.write_text(html_text, encoding="utf-8")
@@ -315,6 +334,7 @@ def main():
     # Success message
     size_kb = len(html_text.encode("utf-8")) / 1024
     print("\nCompleted build, yo!")
+    print(f"  Version: {config['version'] or 'unknown'}")
     print(f"  Output: {html_index_path.relative_to(project_root)}")
     print(f"  Size: {size_kb:.1f} KB")
     print(f"  Files mounted: {len(mounted_files)}")

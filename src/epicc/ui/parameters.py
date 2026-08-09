@@ -12,6 +12,7 @@ from epicc.model.base import BaseSimulationModel
 from epicc.model.parameters import load_model_params, parse_preset_from_file
 from epicc.model.schema import Preset, Scenario, ScenarioVars
 from epicc.ui.state import (
+    DEFAULT_PARAM_IDENTITY,
     clear_results,
     get_active_param_identity,
     reset_params,
@@ -23,9 +24,6 @@ from epicc.ui.preset_keys import (
     _PRESET_INLINE_ADD_SEL_KEY_PREFIX,
     _PRESET_STACK_KEY_PREFIX,
 )
-
-# Avoid circular import — import lazily where needed
-# from epicc.ui.export import render_parameter_export_modal
 
 if TYPE_CHECKING:
     from epicc.model.schema import Parameter, ParameterGroup
@@ -70,6 +68,7 @@ def _render_spec_widget(
     widget_key: str,
     params: dict[str, Any] | None,
     container: Any,
+    label_suffix: str = "",
 ) -> None:
     """Render a typed widget for a parameter with a full schema spec.
 
@@ -77,7 +76,7 @@ def _render_spec_widget(
     ``params[param_id]``.  Pass ``None`` when the caller only needs
     Streamlit session-state (e.g. the scenario editor).
     """
-    display_label = spec.label
+    display_label = spec.label + label_suffix
     help_text = _build_help_text(spec)
 
     if spec.type == "boolean":
@@ -149,17 +148,18 @@ def _render_param(
     params: dict[str, Any],
     container: Any,
     spec: Parameter | None,
+    label_suffix: str = "",
 ) -> None:
     """Render a single parameter widget, with or without a spec."""
     if spec is not None:
         _render_spec_widget(
-            param_id, spec, default_value, widget_key, params, container
+            param_id, spec, default_value, widget_key, params, container, label_suffix
         )
     elif widget_key in st.session_state:
-        params[param_id] = container.text_input(param_id, key=widget_key)
+        params[param_id] = container.text_input(param_id + label_suffix, key=widget_key)
     else:
         params[param_id] = container.text_input(
-            param_id,
+            param_id + label_suffix,
             value=str(default_value) if default_value is not None else "",
             key=widget_key,
         )
@@ -184,8 +184,10 @@ def _render_group_node(
     model_id: str,
     container: Any,
     depth: int,
+    dirty_ids: set[str] | None = None,
 ) -> None:
     """Recursively render a group node or a leaf param ID."""
+    _dirty = dirty_ids or set()
     if isinstance(node, str):
         param_id = node
         if param_id not in param_defaults:
@@ -193,20 +195,23 @@ def _render_group_node(
         default_value = param_defaults[param_id]
         widget_key = f"{model_id}:{param_id}"
         spec = param_specs.get(param_id)
-        _render_param(param_id, default_value, widget_key, params, container, spec)
+        suffix = " [*]" if param_id in _dirty else ""
+        _render_param(param_id, default_value, widget_key, params, container, spec, suffix)
     else:
         # It's a ParameterGroup
+        group_dirty = bool(_dirty & _collect_group_param_ids([node]))
+        label = node.label + (" [*]" if group_dirty else "")
         if depth == 0:
             # Top-level groups become sidebar expanders
             child_container = container.expander(
-                node.label,
+                label,
                 expanded=False,
                 key=f"{model_id}:expander:{node.label}",
             )
         else:
             # Nested groups: Streamlit doesn't support nested expanders, so render
             # a bold markdown sub-header inside the current container instead
-            container.markdown(f"**{node.label}**")
+            container.markdown(f"**{label}**")
             child_container = container
 
         for child in node.children:
@@ -218,6 +223,7 @@ def _render_group_node(
                 model_id,
                 child_container,
                 depth + 1,
+                dirty_ids,
             )
 
 
@@ -253,15 +259,18 @@ def render_parameters_with_indent(
     container: Any = None,
 ) -> None:
     rc = container if container is not None else st
+    dirty_ids = _compute_dirty_ids(param_dict, model_id, param_specs)
+    groups = param_groups if param_groups is not None else []
     specs = param_specs or {}
-    grouped_ids = _collect_group_param_ids(param_groups)
+    grouped_ids = _collect_group_param_ids(groups)
     for param_id, default_value in param_dict.items():
         if param_id not in grouped_ids:
             widget_key = f"{model_id}:{param_id}"
             spec = specs.get(param_id)
-            _render_param(param_id, default_value, widget_key, params, rc, spec)
-    for node in param_groups:
-        _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0)
+            suffix = " [*]" if param_id in dirty_ids else ""
+            _render_param(param_id, default_value, widget_key, params, rc, spec, suffix)
+    for node in groups:
+        _render_group_node(node, specs, param_dict, params, model_id, rc, depth=0, dirty_ids=dirty_ids)
 
 
 def render_validation_error(
@@ -417,7 +426,14 @@ def _render_scenario_editor(
 
             # Label input
             lbl_key = _scenario_label_key(model_key, i)
-            st.text_input("Label", key=lbl_key)
+            default_label = (
+                default_scenarios[i].label
+                if i < len(default_scenarios)
+                else f"Scenario {i + 1}"
+            )
+            st.text_input(
+                "Label", value=st.session_state.get(lbl_key, default_label), key=lbl_key
+            )
 
             # Variable inputs (using the same typed widgets as parameters)
             for var_name, spec in specs.items():
@@ -431,7 +447,7 @@ def _render_scenario_editor(
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button(
-                "➕ Add Scenario",
+                "Add Scenario",
                 disabled=count >= _MAX_SCENARIOS,
                 key=f"{model_key}__add_scen",
             ):
@@ -449,7 +465,7 @@ def _render_scenario_editor(
                 st.rerun()
         with btn_col2:
             if st.button(
-                "➖ Remove Scenario",
+                "Remove Scenario",
                 disabled=count <= _MIN_SCENARIOS,
                 key=f"{model_key}__rm_scen",
             ):
@@ -488,6 +504,30 @@ def _compute_dirty_state(
         if current != native_default:
             return True
     return False
+
+
+def _compute_dirty_ids(
+    model_defaults: dict[str, Any],
+    model_id: str,
+    param_specs: dict[str, Parameter] | None,
+) -> set[str]:
+    """Return the set of param IDs whose widget value differs from the model default."""
+    dirty: set[str] = set()
+    specs = param_specs or {}
+    for key, default_val in model_defaults.items():
+        widget_key = f"{model_id}:{key}"
+        if widget_key not in st.session_state:
+            continue
+        current = st.session_state[widget_key]
+        spec = specs.get(key)
+        native_default = (
+            _native_value(default_val, spec)
+            if spec is not None
+            else (str(default_val) if default_val is not None else "")
+        )
+        if current != native_default:
+            dirty.add(key)
+    return dirty
 
 
 def _compute_scenario_dirty_state(
@@ -645,6 +685,7 @@ def _render_preset_controls_inline(
     return active_stack, file_preset
 
 
+
 def render_sidebar_parameters(
     model: BaseSimulationModel,
     model_key: str,
@@ -681,7 +722,7 @@ def render_sidebar_parameters(
             file_hash_in_stack,
         )
     else:
-        param_identity = ("default", None, 0, None)
+        param_identity = DEFAULT_PARAM_IDENTITY
 
     should_refresh = False
     if get_active_param_identity() != param_identity:

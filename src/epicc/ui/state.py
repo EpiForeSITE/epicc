@@ -18,6 +18,8 @@ _PARAMS_KEY = "params"
 _UPLOAD_HASH_CACHE_KEY = "_upload_hash_cache"
 _CUSTOM_MODELS_KEY = "custom_models"
 
+DEFAULT_PARAM_IDENTITY: tuple[str, None, int, None] = ("default", None, 0, None)
+
 
 def initialize_state() -> None:
     st.session_state.setdefault(_RESULTS_KEY, None)
