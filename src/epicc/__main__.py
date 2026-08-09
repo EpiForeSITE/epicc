@@ -162,6 +162,7 @@ with result_col:
         st.warning("Fix parameter errors to enable simulation.")
         st.stop()
 
+    run_output: dict | None = None
     if run_clicked:
         with st.spinner(f"Running {selected_label}..."):
             run_output = active_model.run(
@@ -182,8 +183,8 @@ with result_col:
     st.divider()
     render_pdf_export_button(container=result_col)
     render_docx_export_button(
-        active_model,  # pass model object, not title string
-        get_run_output() if has_results() else None,
+        active_model,
+        run_output if run_output is not None else (get_run_output() if has_results() else None),
         container=result_col,
     )
 
