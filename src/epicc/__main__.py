@@ -187,7 +187,7 @@ implications of different policy scenarios.
    any time you want to revisit the analysis.
 
  - **Generate a report:** Once you've run a simulation, save the results page as a PDF
-   or Word document to share directly with stakeholders.{_releases_line}
+   share directly with stakeholders.{_releases_line}
 
 ### A note on interpretation
 
