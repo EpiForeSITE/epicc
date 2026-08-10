@@ -30,10 +30,13 @@ from epicc.ui.parameters import (
 from epicc.ui.report import get_report_renderer
 from epicc.ui.state import (
     DEFAULT_PARAM_IDENTITY,
+    discard_preview,
     get_custom_models,
+    get_preview,
     get_run_output,
     has_results,
     initialize_state,
+    set_preview,
     set_run_output,
     set_active_param_identity,
     sync_active_model,
@@ -79,8 +82,6 @@ if not st.session_state.get(_URL_APPLIED_KEY):
 
 _EDITOR_MODE_KEY = "epicc_editor_mode"
 _MODEL_SELECT_KEY = "model_selector"
-_PREVIEW_MODEL_KEY = "epicc_editor_preview_model"
-_PREVIEW_LABEL_KEY = "epicc_editor_preview_label"
 
 
 def _activate_preview(model_label: str) -> bool:
@@ -93,8 +94,7 @@ def _activate_preview(model_label: str) -> bool:
     if not isinstance(result, Model):
         return False
     preview_model = create_model_instance(result)
-    st.session_state[_PREVIEW_MODEL_KEY] = preview_model
-    st.session_state[_PREVIEW_LABEL_KEY] = model_label
+    set_preview(preview_model, model_label)
     model_defaults = load_model_params(preview_model)
     reset_parameters_to_defaults(
         model_defaults, {}, model_label, param_specs=preview_model.parameter_specs
@@ -108,8 +108,7 @@ def _activate_preview(model_label: str) -> bool:
 
 
 def _discard_preview() -> None:
-    st.session_state.pop(_PREVIEW_MODEL_KEY, None)
-    st.session_state.pop(_PREVIEW_LABEL_KEY, None)
+    discard_preview()
 
 
 pending_label = consume_pending_model_selection()
@@ -242,16 +241,16 @@ if st.session_state.get(_EDITOR_MODE_KEY):
 
     st.stop()
 
-preview_model = st.session_state.get(_PREVIEW_MODEL_KEY)
-preview_label = st.session_state.get(_PREVIEW_LABEL_KEY)
+# Sync first so any model change discards a stale preview before it is used.
+params = sync_active_model(selected_label)
+
+preview_model, preview_label = get_preview()
 using_preview = preview_model is not None and preview_label == selected_label
 if using_preview and preview_model is not None:
     active_model = preview_model
     st.warning(
         "You're trying an unsaved, edited version of this model. Nothing is saved yet."
     )
-
-params = sync_active_model(selected_label)
 
 param_col, result_col = st.columns([2, 3], gap="large")
 
