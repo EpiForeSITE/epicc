@@ -10,7 +10,6 @@ from epicc.model.factory import create_model_instance
 from epicc.model.models import get_all_models
 from epicc.model.parameters import load_model_params
 from epicc.model.schema import Model
-from epicc.ui.about import render_whats_new_button
 from epicc.ui.editor import get_current_doc, render_model_editor, validate_doc
 from epicc.ui.export import (
     render_parameter_export_modal,
@@ -117,36 +116,33 @@ pending_label = consume_pending_model_selection()
 if pending_label is not None and pending_label in model_registry:
     st.session_state[_MODEL_SELECT_KEY] = pending_label
 
-hdr_title, hdr_right, hdr_editor = st.columns([3, 3, 1.25])
+hdr_title, hdr_controls = st.columns([3, 4.25])
 render_brand_header(
     CONFIG.brand, CONFIG.app.title, version=__version__, container=hdr_title
 )
 
-with hdr_right:
-    col_model, col_load = st.columns([4, 1], vertical_alignment="center")
-    selected_label: str | None = col_model.selectbox(
-        "Model",
-        list(model_registry),
-        key=_MODEL_SELECT_KEY,
-        index=None,
-        placeholder="Select a model...",
-        label_visibility="collapsed",
-    )
-    render_load_model_button(container=col_load)
+col_model, col_load, col_editor = hdr_controls.columns([2.4, 0.6, 1.25], vertical_alignment="center")
+selected_label: str | None = col_model.selectbox(
+    "Model",
+    list(model_registry),
+    key=_MODEL_SELECT_KEY,
+    index=None,
+    placeholder="Select a model...",
+    label_visibility="collapsed",
+)
+render_load_model_button(container=col_load)
 
 in_editor = selected_label is not None and bool(st.session_state.get(_EDITOR_MODE_KEY))
 if in_editor:
-    try_button_slot = hdr_editor.empty()
+    try_button_slot = col_editor.empty()
 elif selected_label is not None:
-    if hdr_editor.button(
+    if col_editor.button(
         "Open Model Editor",
         use_container_width=True,
         key="open_editor_btn",
     ):
         st.session_state[_EDITOR_MODE_KEY] = True
         st.rerun()
-
-render_whats_new_button(CONFIG.app.releases_url, container=hdr_editor)
 
 st.divider()
 
@@ -163,8 +159,14 @@ if selected_label is None:
         )
         st.stop()
 
+    _releases_line = (
+        f"\n - **See what's new:** Check the [latest release notes]({CONFIG.app.releases_url})"
+        f" to see what changed in v{__version__}."
+        if CONFIG.app.releases_url
+        else ""
+    )
     st.markdown(
-        """
+        f"""
 ## Welcome to EPICC
 
 **EPICC** (or *EP*idemiological *C*ost *C*alculator) is a tool for quickly running arbitrary
@@ -186,7 +188,7 @@ implications of different policy scenarios.
    any time you want to revisit the analysis.
 
  - **Generate a report:** Once you've run a simulation, save the results page as a PDF
-   to share directly with stakeholders.
+   or Word document to share directly with stakeholders.{_releases_line}
 
 ### A note on interpretation
 
