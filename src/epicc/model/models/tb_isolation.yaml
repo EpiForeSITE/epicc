@@ -351,7 +351,7 @@ report:
       infections.
 
       $$
-      \LaTeX \text{ test.}
+      \text{LaTeX test.}
       $$
 
       ## Scenarios

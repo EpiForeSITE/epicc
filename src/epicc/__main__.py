@@ -187,7 +187,7 @@ implications of different policy scenarios.
    any time you want to revisit the analysis.
 
  - **Generate a report:** Once you've run a simulation, save the results page as a PDF
-   share directly with stakeholders.{_releases_line}
+   to share directly with stakeholders.{_releases_line}
 
 ### A note on interpretation
 
@@ -278,7 +278,9 @@ with param_col:
                 render_validation_error(selected_label, exc, container=parameter_panel)
                 has_input_errors = True
 
-        btn_col1, btn_col2 = st.columns(2)
+        # Keep both preset actions in the same keyed row so sidebar CSS can align them.
+        with st.container(key="param-actions-row"):
+            btn_col1, btn_col2 = st.columns(2, gap="small", vertical_alignment="top")
 
         with btn_col1:
             if typed_params is not None:
