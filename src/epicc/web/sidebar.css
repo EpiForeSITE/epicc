@@ -447,6 +447,15 @@ button[data-testid^="stBaseButton"]:not(
     margin: 0.5in;
   }
 
+  [data-testid="stSelectbox"],
+  [data-testid="stColumn"] button,
+  [data-testid="stHeader"],
+  [data-testid="stSidebar"],
+  .stAppDeployButton,
+  footer {
+    display: none !important;
+  }
+
   .section-divider {
     page-break-after: auto;
   }
@@ -497,6 +506,8 @@ button[data-testid^="stBaseButton"]:not(
   .st-key-results-report,
   .st-key-results-report * {
     display: revert !important;
+    filter: none !important;
+    opacity: 1 !important;
   }
 }
 
