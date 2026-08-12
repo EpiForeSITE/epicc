@@ -447,6 +447,18 @@ button[data-testid^="stBaseButton"]:not(
     margin: 0.5in;
   }
 
+  html,
+  body,
+  #root,
+  .stlite-container,
+  [data-testid="stAppViewContainer"] {
+    filter: none !important;
+    -webkit-filter: none !important;
+    height: auto !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+  }
+
   [data-testid="stSelectbox"],
   [data-testid="stColumn"] button,
   [data-testid="stHeader"],
