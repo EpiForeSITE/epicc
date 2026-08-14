@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
 
 import streamlit as st
@@ -45,18 +46,23 @@ def _build_help_text(spec: Parameter) -> str | None:
     return "\n\n".join(parts) or None
 
 
-def _native_value(value: Any, spec: Parameter) -> Any:
+def native_value(value: Any, spec: Parameter) -> Any:
     """Coerce a value to the native Python type declared by the spec."""
     try:
         if spec.type == "integer":
-            return int(float(value))
+            # Ints pass through exactly; anything else goes via Decimal rather
+            # than float, which would round values beyond 2**53 (bool is an int
+            # subclass and keeps its long-standing True -> 1 behaviour).
+            if isinstance(value, int):
+                return int(value)
+            return int(Decimal(str(value)))
         if spec.type == "number":
             return float(value)
         if spec.type == "boolean":
             if isinstance(value, str):
                 return value.lower() not in ("false", "0", "no", "")
             return bool(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, InvalidOperation):
         pass
     return str(value)
 
@@ -80,7 +86,7 @@ def _render_spec_widget(
     help_text = _build_help_text(spec)
 
     if spec.type == "boolean":
-        native_default = _native_value(default_value, spec)
+        native_default = native_value(default_value, spec)
         if widget_key in st.session_state:
             result = container.checkbox(display_label, key=widget_key, help=help_text)
         else:
@@ -91,7 +97,7 @@ def _render_spec_widget(
     elif spec.type in ("integer", "number"):
         is_int = spec.type == "integer"
         coerce = int if is_int else float
-        native_default = coerce(_native_value(default_value, spec))
+        native_default = coerce(native_value(default_value, spec))
 
         kwargs: dict[str, Any] = {
             "label": display_label,
@@ -234,7 +240,7 @@ def _set_param_widget_state(
     params: dict[str, Any],
     spec: Parameter | None = None,
 ) -> None:
-    native = _native_value(value, spec) if spec is not None else str(value)
+    native = native_value(value, spec) if spec is not None else str(value)
     st.session_state[widget_key] = native
     params[param_id] = native
 
@@ -318,8 +324,8 @@ def build_typed_params(
     return model.parameter_model().model_validate(payload)
 
 
-_MAX_SCENARIOS = 10
-_MIN_SCENARIOS = 1
+MAX_SCENARIOS = 10
+MIN_SCENARIOS = 1
 
 
 def _scenario_count_key(model_key: str) -> str:
@@ -353,7 +359,7 @@ def _init_scenario_state(
         vars_dict = scen.vars.model_dump()
         for var_name, spec in specs.items():
             val = vars_dict.get(var_name, spec.default)
-            st.session_state[_scenario_var_key(model_key, i, var_name)] = _native_value(
+            st.session_state[_scenario_var_key(model_key, i, var_name)] = native_value(
                 val, spec
             )
 
@@ -448,7 +454,7 @@ def _render_scenario_editor(
         with btn_col1:
             if st.button(
                 "Add Scenario",
-                disabled=count >= _MAX_SCENARIOS,
+                disabled=count >= MAX_SCENARIOS,
                 key=f"{model_key}__add_scen",
             ):
                 new_idx = count
@@ -461,12 +467,12 @@ def _render_scenario_editor(
                 for var_name, spec in specs.items():
                     st.session_state[
                         _scenario_var_key(model_key, new_idx, var_name)
-                    ] = _native_value(spec.default, spec)
+                    ] = native_value(spec.default, spec)
                 st.rerun()
         with btn_col2:
             if st.button(
                 "Remove Scenario",
-                disabled=count <= _MIN_SCENARIOS,
+                disabled=count <= MIN_SCENARIOS,
                 key=f"{model_key}__rm_scen",
             ):
                 last = count - 1
@@ -497,7 +503,7 @@ def _compute_dirty_state(
         current = st.session_state[widget_key]
         spec = specs.get(key)
         native_default = (
-            _native_value(default_val, spec)
+            native_value(default_val, spec)
             if spec is not None
             else (str(default_val) if default_val is not None else "")
         )
@@ -521,7 +527,7 @@ def _compute_dirty_ids(
         current = st.session_state[widget_key]
         spec = specs.get(key)
         native_default = (
-            _native_value(default_val, spec)
+            native_value(default_val, spec)
             if spec is not None
             else (str(default_val) if default_val is not None else "")
         )
@@ -544,7 +550,7 @@ def _compute_scenario_dirty_state(
             return True
         vars_dict = scen.vars.model_dump()
         for var_name, spec in specs.items():
-            default_val = _native_value(vars_dict.get(var_name, spec.default), spec)
+            default_val = native_value(vars_dict.get(var_name, spec.default), spec)
             if st.session_state.get(_scenario_var_key(model_id, i, var_name)) != default_val:
                 return True
     return False
