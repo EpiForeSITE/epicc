@@ -102,7 +102,7 @@ def render_pdf_export_button(container: Any = None) -> None:
     clicked = rc.button(
         "Save report as PDF",
         disabled=not has_results(),
-        use_container_width=True,
+        width='stretch',
         type='primary',
     )
 
@@ -123,7 +123,25 @@ def trigger_print_if_requested() -> None:
 
     trigger_token = st.session_state.get(_PRINT_TOKEN_KEY, 0)
 
-    # Reverted to Olivia's original, hacky, but highly effective base64 injection bypass.
+    # What the hell is this, Streamlit? Why can't I just run JS without this nonsense? Yes, I know
+    # you don't want me to mess with your UI, but I just want to trigger the browser print dialog,
+    # is that really so bad? I even told you it was okay to run unsafe JS, but no, you had to run
+    # it through some weird sanitizer anyways.
+    #
+    # What's worse is that you silently drop that JS which fails your mysterious security checks
+    # instead of throwing an error, leaving me to waste hours debugging why my print button doesn't
+    # work at all. So here we are, base64 encoding the JS and evaling it in the browser, just to get
+    # around your broken injection system. I hope you're proud of yourselves.
+    #
+    # Seriously!?!? This works?
+    #
+    # This is an alternative implementation to something like:
+    #
+    #   https://github.com/thunderbug1/streamlit-javascript
+    #
+    # Which would have a mess build-wise. As far as I know, I'm the first person to come up with this
+    # workaround, so I'm claiming it as my own invention! Don't tell Streamlit.
+    #
     # By using st.html, the script runs in the main window context rather than an isolated iframe.
     with importlib.resources.files("epicc").joinpath("js/print_results.js").open("rb") as f:
         js = f.read().decode()
