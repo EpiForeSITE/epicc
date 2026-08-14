@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
 
 import streamlit as st
@@ -49,14 +50,19 @@ def native_value(value: Any, spec: Parameter) -> Any:
     """Coerce a value to the native Python type declared by the spec."""
     try:
         if spec.type == "integer":
-            return int(float(value))
+            # Ints pass through exactly; anything else goes via Decimal rather
+            # than float, which would round values beyond 2**53 (bool is an int
+            # subclass and keeps its long-standing True -> 1 behaviour).
+            if isinstance(value, int):
+                return int(value)
+            return int(Decimal(str(value)))
         if spec.type == "number":
             return float(value)
         if spec.type == "boolean":
             if isinstance(value, str):
                 return value.lower() not in ("false", "0", "no", "")
             return bool(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, InvalidOperation):
         pass
     return str(value)
 

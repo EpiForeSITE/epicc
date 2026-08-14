@@ -17,6 +17,7 @@ from epicc.model.schema import (
     TableBlock,
     TableRow,
 )
+from epicc.ui.parameters import native_value
 from epicc.ui.url_params import (
     build_slug_registry,
     decode_state,
@@ -69,6 +70,49 @@ def text_model() -> BaseSimulationModel:
     )
 
 
+def single_parameter_model(
+    param_id: str,
+    *,
+    param_type: str = "integer",
+    default: Any = 1,
+    source_path: str = "single.yaml",
+) -> BaseSimulationModel:
+    """Build a minimal custom model for URL grammar edge cases."""
+    return create_model_instance(
+        Model(
+            title=f"Single {param_id}",
+            description="Exercises one custom parameter id",
+            parameters={
+                param_id: Parameter(type=param_type, label="Value", default=default)
+            },
+            equations={"eq_total": Equation(label="Total", compute="1")},
+            scenarios=[Scenario(id="only", label="Only", vars=ScenarioVars())],
+            report=[
+                TableBlock(
+                    type="table", rows=[TableRow(label="Total", value="eq_total")]
+                )
+            ],
+            groups=[param_id],
+        ),
+        source_path=source_path,
+    )
+
+
+def custom_measles_model(
+    title: str,
+    source_path: str,
+    *,
+    vaccination_default: float | None = None,
+) -> BaseSimulationModel:
+    """Return a Measles-derived custom model with a distinct registry label."""
+    base = next(m for m in get_all_models() if m.human_name() == MEASLES_LABEL)
+    definition = base.get_model_definition().model_copy(deep=True)
+    definition.title = title
+    if vaccination_default is not None:
+        definition.parameters["vaccination_rate"].default = vaccination_default
+    return create_model_instance(definition, source_path=source_path)
+
+
 def defaults_of(model: BaseSimulationModel) -> dict[str, Any]:
     """The model's equation-parameter defaults, as the sidebar would report them."""
     return {pid: spec.default for pid, spec in (model.parameter_specs or {}).items()}
@@ -113,14 +157,18 @@ def test_slug_registry_keeps_collisions(
     ]
 
 
-def test_shipped_models_avoid_reserved_parameter_names(
-    registry: dict[str, BaseSimulationModel],
-) -> None:
-    for model in registry.values():
-        names = set(model.parameter_specs or {}) | set(
-            model.scenario_parameter_specs or {}
-        )
-        assert not [name for name in names if is_reserved(name)], model.human_name()
+@pytest.mark.parametrize(
+    "param_id", ["model", "scenarios", "embed", "Embed", "EMBED_OPTIONS"]
+)
+def test_parameter_ids_that_match_reserved_keys_round_trip(param_id: str) -> None:
+    model = single_parameter_model(param_id)
+
+    query = encode_state(model, {param_id: 7})
+    values, _, warnings = decode_state(model, query)
+
+    assert query == {"model": "single", f"param.{param_id}": "7"}
+    assert values == {param_id: 7}
+    assert warnings == []
 
 
 @pytest.mark.parametrize(
@@ -148,7 +196,7 @@ def test_only_changed_parameters_appear(measles: BaseSimulationModel) -> None:
 
     query = encode_state(measles, params, measles.default_scenarios)
 
-    assert query == {"model": "measles", "vaccination_rate": "0.9"}
+    assert query == {"model": "measles", "param.vaccination_rate": "0.9"}
 
 
 def test_whole_floats_lose_their_trailing_zero(measles: BaseSimulationModel) -> None:
@@ -156,7 +204,7 @@ def test_whole_floats_lose_their_trailing_zero(measles: BaseSimulationModel) -> 
 
     query = encode_state(measles, params, measles.default_scenarios)
 
-    assert query["contacts_per_case"] == "200"
+    assert query["param.contacts_per_case"] == "200"
 
 
 def test_scenario_overrides_are_keyed_by_scenario_id(
@@ -210,6 +258,33 @@ def test_scenario_ids_with_commas_stay_unambiguous(
     assert [s.id for s in decoded] == ["alpha,beta", "gamma"]
 
 
+@pytest.mark.parametrize(("scenario_id", "encoded_id"), [("", "!"), ("!", "%21")])
+def test_empty_scenario_id_token_cannot_collide_with_a_literal_id(
+    measles: BaseSimulationModel, scenario_id: str, encoded_id: str
+) -> None:
+    definition = measles.get_model_definition().model_copy(deep=True)
+    definition.title = f"Scenario id {scenario_id!r}"
+    definition.scenarios = [
+        Scenario(id=scenario_id, label="Original", vars=ScenarioVars(n_cases=22))
+    ]
+    model = create_model_instance(definition, source_path="scenario-id.yaml")
+    scenarios = [
+        Scenario(id=scenario_id, label="Renamed", vars=ScenarioVars(n_cases=30)),
+        Scenario(id="custom_1", label="Scenario 2", vars=ScenarioVars(n_cases=7)),
+    ]
+
+    query = encode_state(model, defaults_of(model), scenarios)
+    assert query["scenarios"] == f"{encoded_id},custom_1"
+
+    _, decoded, warnings = decode_state(model, query)
+    assert decoded is not None
+    assert [(s.id, s.label, s.vars.n_cases) for s in decoded] == [
+        (scenario_id, "Renamed", 30),
+        ("custom_1", "Scenario 2", 7),
+    ]
+    assert warnings == []
+
+
 # --------------------------------------------------------------------------
 # Decoding
 # --------------------------------------------------------------------------
@@ -227,7 +302,9 @@ def test_scenario_ids_with_commas_stay_unambiguous(
 def test_values_decode_to_native_types(
     measles: BaseSimulationModel, param_id: str, text: str, expected: Any
 ) -> None:
-    values, _, warnings = decode_state(measles, {"model": "measles", param_id: text})
+    values, _, warnings = decode_state(
+        measles, {"model": "measles", f"param.{param_id}": text}
+    )
 
     assert values == {param_id: expected}
     assert type(values[param_id]) is type(expected)
@@ -236,7 +313,7 @@ def test_values_decode_to_native_types(
 
 def test_enum_value_decodes(tb: BaseSimulationModel) -> None:
     values, _, warnings = decode_state(
-        tb, {"model": "tb_isolation", "isolation_type": "MOTEL_ISO"}
+        tb, {"model": "tb_isolation", "param.isolation_type": "MOTEL_ISO"}
     )
 
     assert values == {"isolation_type": "MOTEL_ISO"}
@@ -298,7 +375,7 @@ def test_value_above_maximum_is_clamped_with_a_warning(
     measles: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        measles, {"model": "measles", "vaccination_rate": "5"}
+        measles, {"model": "measles", "param.vaccination_rate": "5"}
     )
 
     assert values == {"vaccination_rate": 1.0}
@@ -310,7 +387,7 @@ def test_value_below_minimum_is_clamped_with_a_warning(
     measles: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        measles, {"model": "measles", "hourly_wage_worker": "-3"}
+        measles, {"model": "measles", "param.hourly_wage_worker": "-3"}
     )
 
     assert values == {"hourly_wage_worker": 0.0}
@@ -322,40 +399,88 @@ def test_fractional_value_for_an_integer_is_rejected_not_truncated(
     measles: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        measles, {"model": "measles", "quarantine_days": "10.5"}
+        measles, {"model": "measles", "param.quarantine_days": "10.5"}
     )
 
     assert values == {}
-    assert warnings == ["Ignored `quarantine_days=10.5`: expected a whole number."]
+    assert warnings == [
+        "Ignored `param.quarantine_days=10.5`: expected a whole number."
+    ]
 
 
 def test_integral_float_is_accepted_for_an_integer(
     measles: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        measles, {"model": "measles", "quarantine_days": "10.0"}
+        measles, {"model": "measles", "param.quarantine_days": "10.0"}
     )
 
     assert values == {"quarantine_days": 10}
     assert warnings == []
 
 
+@pytest.mark.parametrize("text", ["10.0000000000000001", "1e-1000"])
+def test_nearly_integral_values_are_rejected_exactly(
+    measles: BaseSimulationModel, text: str
+) -> None:
+    values, _, warnings = decode_state(
+        measles, {"model": "measles", "param.quarantine_days": text}
+    )
+
+    assert values == {}
+    assert len(warnings) == 1
+    assert "expected a whole number" in warnings[0]
+
+
+def test_integer_scientific_notation_is_accepted_exactly(
+    measles: BaseSimulationModel,
+) -> None:
+    values, _, warnings = decode_state(
+        measles, {"model": "measles", "param.quarantine_days": "1e1"}
+    )
+
+    assert values == {"quarantine_days": 10}
+    assert warnings == []
+
+
+def test_integer_outside_streamlits_safe_range_is_rejected() -> None:
+    model = single_parameter_model("n")
+
+    values, _, warnings = decode_state(
+        model, {"model": "single", "param.n": "9007199254740993"}
+    )
+
+    assert values == {}
+    assert len(warnings) == 1
+    assert "whole numbers must be between" in warnings[0]
+
+
+def test_integer_encoding_does_not_round_through_float() -> None:
+    model = single_parameter_model("n")
+
+    query = encode_state(model, {"n": 9007199254740993})
+
+    assert query["param.n"] == "9007199254740993"
+
+
 def test_unparseable_number_is_dropped_with_a_warning(
     measles: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        measles, {"model": "measles", "vaccination_rate": "abc"}
+        measles, {"model": "measles", "param.vaccination_rate": "abc"}
     )
 
     assert values == {}
-    assert warnings == ["Ignored `vaccination_rate=abc`: expected a number."]
+    assert warnings == [
+        "Ignored `param.vaccination_rate=abc`: expected a number."
+    ]
 
 
 def test_unknown_enum_constant_is_dropped_with_a_warning(
     tb: BaseSimulationModel,
 ) -> None:
     values, _, warnings = decode_state(
-        tb, {"model": "tb_isolation", "isolation_type": "motel"}
+        tb, {"model": "tb_isolation", "param.isolation_type": "motel"}
     )
 
     assert values == {}
@@ -367,13 +492,63 @@ def test_scenario_variable_at_top_level_is_explained(
     measles: BaseSimulationModel,
 ) -> None:
     values, scenarios, warnings = decode_state(
-        measles, {"model": "measles", "n_cases": "50"}
+        measles, {"model": "measles", "param.n_cases": "50"}
     )
 
     assert values == {}
     assert scenarios is None
     assert len(warnings) == 1
     assert "scen.<scenario>.n_cases" in warnings[0]
+
+
+@pytest.mark.parametrize("param_id", ["vaccination_rate", "n_cases"])
+def test_parameter_without_the_namespace_is_explained(
+    measles: BaseSimulationModel, param_id: str
+) -> None:
+    # A bare id looks right but is just an unknown key, so it would otherwise be
+    # ignored in silence and quietly leave the default in place.
+    values, scenarios, warnings = decode_state(
+        measles, {"model": "measles", param_id: "0.5"}
+    )
+
+    assert values == {}
+    assert scenarios is None
+    assert warnings == [
+        f"Ignored `{param_id}=0.5`: parameters need the `param.` prefix, "
+        f"as `param.{param_id}`."
+    ]
+
+
+def test_reserved_key_names_do_not_trigger_the_namespace_hint() -> None:
+    # `model` is a real query key here, not a parameter someone under-qualified.
+    model = single_parameter_model("model")
+
+    _, _, warnings = decode_state(model, {"model": "single", "param.model": "7"})
+
+    assert warnings == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (10, 10),
+        (10.5, 10),
+        ("10", 10),
+        ("10.0", 10),
+        ("1e1", 10),
+        # Exact beyond 2**53, where a float round trip would lose the last digit.
+        (9007199254740993, 9007199254740993),
+        ("9007199254740993", 9007199254740993),
+    ],
+)
+def test_integer_coercion_is_exact_and_still_accepts_text(
+    value: Any, expected: int
+) -> None:
+    # native_value backs the widgets, the dirty markers, and the URL diff, so it
+    # has to agree with the exact parsing decode does.
+    spec = Parameter(type="integer", label="N", default=1)
+
+    assert native_value(value, spec) == expected
 
 
 def test_override_for_an_absent_scenario_is_reported(
@@ -424,7 +599,7 @@ def test_string_values_keep_their_surrounding_whitespace(
     # Stripping here would make encoding and decoding non-inverse: the value
     # goes out with its spaces and would silently come back without them.
     query = encode_state(text_model, {"region": "  north  ", "n_items": 5})
-    assert query["region"] == "  north  "
+    assert query["param.region"] == "  north  "
 
     values, _, warnings = decode_state(text_model, query)
     assert values == {"region": "  north  "}
@@ -456,13 +631,13 @@ def test_warnings_cannot_break_out_of_their_code_span(
     injection = "`![pwned](https://example.invalid/x.png)"
 
     _, _, warnings = decode_state(
-        measles, {"model": "measles", "vaccination_rate": injection}
+        measles, {"model": "measles", "param.vaccination_rate": injection}
     )
 
     assert len(warnings) == 1
     before, quoted, after = warnings[0].split("`")
     assert before == "Ignored "
-    assert quoted == "vaccination_rate=![pwned](https://example.invalid/x.png)"
+    assert quoted == "param.vaccination_rate=![pwned](https://example.invalid/x.png)"
     assert after == ": expected a number."
 
 
@@ -470,7 +645,8 @@ def test_warnings_flatten_newlines_and_truncate_long_values(
     measles: BaseSimulationModel,
 ) -> None:
     _, _, warnings = decode_state(
-        measles, {"model": "measles", "vaccination_rate": "a\n\nb" + "x" * 500}
+        measles,
+        {"model": "measles", "param.vaccination_rate": "a\n\nb" + "x" * 500},
     )
 
     assert len(warnings) == 1
@@ -488,7 +664,11 @@ def test_warnings_flatten_newlines_and_truncate_long_values(
     "query",
     [
         {"model": "measles"},
-        {"model": "measles", "vaccination_rate": "0.9", "contacts_per_case": "200"},
+        {
+            "model": "measles",
+            "param.vaccination_rate": "0.9",
+            "param.contacts_per_case": "200",
+        },
         {
             "model": "measles",
             "scen.22_cases.label": "Small outbreak",
@@ -510,8 +690,8 @@ def test_roundtrip_is_stable(
 def test_roundtrip_is_stable_for_the_enum_model(tb: BaseSimulationModel) -> None:
     query = {
         "model": "tb_isolation",
-        "isolation_type": "MOTEL_ISO",
-        "discount_rate": "0.05",
+        "param.isolation_type": "MOTEL_ISO",
+        "param.discount_rate": "0.05",
         "scen.5_day.label": "Short isolation",
     }
 
@@ -521,9 +701,11 @@ def test_roundtrip_is_stable_for_the_enum_model(tb: BaseSimulationModel) -> None
 def test_clamped_value_settles_after_one_roundtrip(
     measles: BaseSimulationModel,
 ) -> None:
-    once = roundtrip(measles, {"model": "measles", "vaccination_rate": "5"})
+    once = roundtrip(
+        measles, {"model": "measles", "param.vaccination_rate": "5"}
+    )
 
-    assert once == {"model": "measles", "vaccination_rate": "1"}
+    assert once == {"model": "measles", "param.vaccination_rate": "1"}
     assert roundtrip(measles, once) == once
 
 
@@ -532,12 +714,29 @@ def test_clamped_value_settles_after_one_roundtrip(
 # --------------------------------------------------------------------------
 
 
+def test_app_round_trips_a_host_reserved_parameter_id() -> None:
+    model = single_parameter_model("embed")
+    label = model.human_name()
+    app = AppTest.from_file("app.py")
+    app.session_state["custom_models"] = {label: model}
+    app.query_params.update({"model": "single", "param.embed": "7"})
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{label}:embed"] == 7
+    assert dict(app.query_params) == {
+        "model": ["single"],
+        "param.embed": ["7"],
+    }
+
+
 def test_app_restores_and_rewrites_complete_simulator_state() -> None:
     app = AppTest.from_file("app.py")
     app.query_params.update(
         {
             "model": "measles",
-            "contacts_per_case": "200",
+            "param.contacts_per_case": "200",
             "scen.22_cases.label": "Test 1",
             "scen.22_cases.n_cases": "1000",
         }
@@ -553,7 +752,7 @@ def test_app_restores_and_rewrites_complete_simulator_state() -> None:
 
     # AppTest exposes query values as single-item lists.
     assert app.query_params["model"][0] == "measles"
-    assert app.query_params["contacts_per_case"][0] == "200"
+    assert app.query_params["param.contacts_per_case"][0] == "200"
     assert app.query_params["scen.22_cases.label"][0] == "Test 1"
     assert app.query_params["scen.22_cases.n_cases"][0] == "1000"
 
@@ -573,7 +772,7 @@ def test_app_keeps_an_unresolved_link_pending_until_its_model_loads() -> None:
     # The link names a model the session doesn't have yet. Discarding it here
     # would open the model at its own defaults once it finally showed up.
     app = AppTest.from_file("app.py")
-    app.query_params.update({"model": "later", "contacts_per_case": "200"})
+    app.query_params.update({"model": "later", "param.contacts_per_case": "200"})
 
     app.run(timeout=30)
     assert not app.exception
@@ -593,6 +792,70 @@ def test_app_keeps_an_unresolved_link_pending_until_its_model_loads() -> None:
     assert app.session_state["later:contacts_per_case"] == 200.0
 
 
+def test_app_reports_decode_warnings_after_a_missing_model_loads() -> None:
+    app = AppTest.from_file("app.py")
+    app.query_params.update(
+        {"model": "later", "param.contacts_per_case": "not-a-number"}
+    )
+
+    app.run(timeout=30)
+    assert not app.exception
+    assert any("isn't loaded here" in warning.value for warning in app.warning)
+
+    app.session_state["custom_models"] = {
+        "later": custom_measles_model("Later model", "later.yaml")
+    }
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state["later:contacts_per_case"] == 141.5
+    assert any("expected a number" in warning.value for warning in app.warning)
+    assert dict(app.query_params) == {"model": ["later"]}
+
+    app.run(timeout=30)
+    assert not any("expected a number" in warning.value for warning in app.warning)
+
+
+def test_app_applies_pending_values_to_the_selected_ambiguous_model() -> None:
+    custom_label = "Custom Measles"
+    app = AppTest.from_file("app.py")
+    app.session_state["custom_models"] = {
+        custom_label: custom_measles_model(custom_label, "measles.yaml")
+    }
+    app.query_params.update(
+        {"model": "measles", "param.contacts_per_case": "200"}
+    )
+
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.session_state["model_selector"] is None
+    assert any("more than one loaded model" in w.value for w in app.warning)
+
+    app.selectbox[0].select(custom_label).run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{custom_label}:contacts_per_case"] == 200.0
+    assert dict(app.query_params) == {}
+    assert any("Link sharing is unavailable" in w.value for w in app.warning)
+
+
+def test_app_publishes_no_link_for_a_colliding_custom_slug() -> None:
+    custom_label = "Edited Measles"
+    custom_model = custom_measles_model(
+        custom_label, "measles.yaml", vaccination_default=0.9
+    )
+
+    app = AppTest.from_file("app.py")
+    app.session_state["custom_models"] = {custom_label: custom_model}
+    app.session_state["model_selector"] = custom_label
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert dict(app.query_params) == {}
+    assert any("Link sharing is unavailable" in w.value for w in app.warning)
+
+
 def test_app_publishes_no_link_while_previewing_an_edited_model() -> None:
     # A preview's values are diffed against the edited defaults, so any link
     # written here would reopen the saved model showing different numbers.
@@ -601,7 +864,9 @@ def test_app_publishes_no_link_while_previewing_an_edited_model() -> None:
     edited.parameters["vaccination_rate"].default = 0.9
 
     app = AppTest.from_file("app.py")
-    app.query_params.update({"model": "measles", "contacts_per_case": "200"})
+    app.query_params.update(
+        {"model": "measles", "param.contacts_per_case": "200"}
+    )
     app.session_state["epicc_editor_preview_model"] = create_model_instance(edited)
     app.session_state["epicc_editor_preview_label"] = MEASLES_LABEL
     # Match the rerun that "Try in Calculator" produces: the model is already

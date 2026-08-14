@@ -42,7 +42,13 @@ from epicc.ui.state import (
     sync_active_model,
 )
 from epicc.ui.styles import load_styles, render_brand_header
-from epicc.ui.url_params import clear_url_state, read_url_state, write_url_state
+from epicc.ui.url_params import (
+    build_slug_registry,
+    clear_url_state,
+    model_slug,
+    read_url_state,
+    write_url_state,
+)
 
 st.set_page_config(page_title=CONFIG.app.title, layout="wide")
 load_styles(CONFIG.brand)
@@ -52,26 +58,48 @@ all_models = get_all_models()
 model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all_models}
 model_registry.update(get_custom_models())
 
+_EDITOR_MODE_KEY = "epicc_editor_mode"
+_MODEL_SELECT_KEY = "model_selector"
+_URL_APPLIED_KEY = "_url_params_applied"
+_URL_WARNINGS_KEY = "_url_params_warnings"
+_URL_UNRESOLVED_WARNED_KEY = "_url_params_unresolved_warned"
+
+# A just-loaded model is selected on the rerun after the upload dialog closes.
+# Consume that selection before URL resolution so it can disambiguate a pending
+# link whose slug belongs to more than one loaded model.
+pending_label = consume_pending_model_selection()
+if pending_label is not None and pending_label in model_registry:
+    st.session_state[_MODEL_SELECT_KEY] = pending_label
+
 # Restore model selection and parameters from URL query string on first load.
 # A link naming a model that isn't loaded yet stays pending rather than being
 # discarded: the user may still upload that model, and the values should land
-# when they do. Only the warning is one-shot, so it doesn't repeat every rerun.
-_URL_APPLIED_KEY = "_url_params_applied"
-_URL_WARNINGS_KEY = "_url_params_warnings"
-_URL_WARNED_KEY = "_url_params_warned"
+# when they do. Its unresolved warning is one-shot; any value warnings found
+# after the model arrives are still shown.
 if not st.session_state.get(_URL_APPLIED_KEY):
-    _url_state = read_url_state(model_registry)
+    _url_state = read_url_state(
+        model_registry,
+        preferred_label=st.session_state.get(_MODEL_SELECT_KEY),
+    )
     if _url_state is None:
         st.session_state[_URL_APPLIED_KEY] = True
     else:
-        if _url_state.warnings and not st.session_state.get(_URL_WARNED_KEY):
-            st.session_state[_URL_WARNED_KEY] = True
-            st.session_state[_URL_WARNINGS_KEY] = _url_state.warnings
+        if _url_state.warnings:
+            should_queue = _url_state.resolved or not st.session_state.get(
+                _URL_UNRESOLVED_WARNED_KEY
+            )
+            if should_queue:
+                st.session_state[_URL_WARNINGS_KEY] = [
+                    *st.session_state.get(_URL_WARNINGS_KEY, []),
+                    *_url_state.warnings,
+                ]
+            if not _url_state.resolved:
+                st.session_state[_URL_UNRESOLVED_WARNED_KEY] = True
         if _url_state.resolved:
             st.session_state[_URL_APPLIED_KEY] = True
             _url_label = _url_state.model_label
             assert _url_label is not None  # Type narrowing for mypy
-            st.session_state["model_selector"] = _url_label
+            st.session_state[_MODEL_SELECT_KEY] = _url_label
             # Activate the model and populate its keyed widgets before they render.
             _url_params = sync_active_model(_url_label)
             set_active_param_identity(DEFAULT_PARAM_IDENTITY)
@@ -88,9 +116,6 @@ if not st.session_state.get(_URL_APPLIED_KEY):
                     _url_state.scenarios,
                     _url_active_model.scenario_parameter_specs or {},
                 )
-
-_EDITOR_MODE_KEY = "epicc_editor_mode"
-_MODEL_SELECT_KEY = "model_selector"
 
 
 def _activate_preview(model_label: str) -> bool:
@@ -119,10 +144,6 @@ def _activate_preview(model_label: str) -> bool:
 def _discard_preview() -> None:
     discard_preview()
 
-
-pending_label = consume_pending_model_selection()
-if pending_label is not None and pending_label in model_registry:
-    st.session_state[_MODEL_SELECT_KEY] = pending_label
 
 hdr_title, hdr_controls = st.columns([3, 4.25])
 render_brand_header(
@@ -261,11 +282,19 @@ params = sync_active_model(selected_label)
 
 preview_model, preview_label = get_preview()
 using_preview = preview_model is not None and preview_label == selected_label
+selected_slug = model_slug(model_registry[selected_label])
+slug_labels = build_slug_registry(model_registry).get(selected_slug, [])
+slug_is_unique = slug_labels == [selected_label]
 if using_preview and preview_model is not None:
     active_model = preview_model
     st.warning(
         "You're trying an unsaved, edited version of this model. Nothing is saved "
         "yet, and this state can't be shared as a link."
+    )
+elif not slug_is_unique:
+    st.warning(
+        "Link sharing is unavailable because another loaded model uses the same "
+        "YAML filename. Rename the custom model file to give it a unique URL name."
     )
 
 param_col, result_col = st.columns([2, 3], gap="large")
@@ -285,11 +314,11 @@ with param_col:
         # one no longer applies.
         st.session_state[_URL_APPLIED_KEY] = True
 
-        if using_preview:
+        if using_preview or not slug_is_unique:
             # A preview's values are diffed against the *edited* defaults and its
-            # equation changes can't be expressed at all, so any link written here
-            # would reopen the saved model showing different numbers. Publish
-            # nothing rather than something misleading.
+            # equation changes can't be expressed at all. A colliding slug could
+            # resolve to a different model. Publish nothing in either case rather
+            # than leaving a misleading permalink behind.
             clear_url_state()
         else:
             # Keep the URL in sync with current parameter values.

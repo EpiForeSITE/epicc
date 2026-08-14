@@ -3,24 +3,24 @@
 The address bar *is* the permalink, so the query string is written to be read,
 copied into a document, and hand-edited:
 
-    ?model=measles&vaccination_rate=0.9&scen.22_cases.label=Small+outbreak
+    ?model=measles&param.vaccination_rate=0.9&scen.22_cases.label=Small+outbreak
 
 Grammar:
 
 - ``model``: the model slug (the YAML file stem, e.g. ``measles``). Required;
   without it there is nothing to restore.
-- ``<param_id>``: an equation-context parameter, keyed by its YAML id. Emitted
-  only when the current value differs from the model's default, so a link shows
-  exactly what the sender changed and nothing else.
+- ``param.<param_id>``: an equation-context parameter, keyed by its YAML id.
+  Emitted only when the current value differs from the model's default, so a
+  link shows exactly what the sender changed and nothing else.
 - ``scen.<scenario_id>.<var>``: a scenario-variable override.
 - ``scen.<scenario_id>.label``: a scenario label override.
 - ``scenarios``: comma-separated ordered scenario ids. Emitted only when the
   scenario set or its order differs from the model's defaults.
 
-Some key names are reserved (see :data:`RESERVED_KEYS`): ``model`` and
+Some top-level key names are reserved (see :data:`RESERVED_KEYS`): ``model`` and
 ``scenarios`` because this grammar uses them, and Streamlit's ``embed`` /
 ``embed_options`` because :meth:`st.query_params.from_dict` refuses to set them.
-A parameter with a reserved id is skipped rather than written to the URL.
+The ``param.`` namespace keeps parameter ids from colliding with any of them.
 Unknown keys are ignored on the way in, so stray keys are harmless.
 
 Values decoded from the URL are coerced, range-clamped, and validated against
@@ -34,6 +34,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote
@@ -49,8 +50,15 @@ if TYPE_CHECKING:
 
 MODEL_KEY = "model"
 SCENARIOS_KEY = "scenarios"
+_PARAM_PREFIX = "param."
 _SCEN_PREFIX = "scen."
 _LABEL_FIELD = "label"
+_EMPTY_SCENARIO_ID_TOKEN = "!"
+
+# Streamlit number inputs serialize through JavaScript and cannot preserve
+# integers outside this range.
+_MAX_SAFE_INTEGER = (1 << 53) - 1
+_MIN_SAFE_INTEGER = -_MAX_SAFE_INTEGER
 
 #: Lowercase query keys that can never denote a model parameter. ``embed`` and
 #: ``embed_options`` belong to Streamlit, which raises a ``StreamlitAPIException``
@@ -67,6 +75,11 @@ _MAX_ECHO_CHARS = 80
 def is_reserved(key: str) -> bool:
     """Whether *key* is a query key this grammar or Streamlit claims for itself."""
     return key.lower() in RESERVED_KEYS
+
+
+def _param_key(param_id: str) -> str:
+    """Return the namespaced query key for an equation parameter id."""
+    return f"{_PARAM_PREFIX}{param_id}"
 
 
 @dataclass
@@ -175,7 +188,47 @@ def _parse_value(raw: str, spec: Parameter, key: str) -> tuple[Any | None, str |
     and enum values are taken verbatim, so encoding and decoding stay inverses
     of each other for values that legitimately begin or end with a space.
     """
-    if spec.type in ("integer", "number"):
+    if spec.type == "integer":
+        text = raw.strip()
+        try:
+            exact = Decimal(text)
+        except (InvalidOperation, TypeError, ValueError):
+            return None, f"Ignored {_code(f'{key}={raw}')}: expected a number."
+        if not exact.is_finite():
+            return None, f"Ignored {_code(f'{key}={raw}')}: expected a finite number."
+        if exact != exact.to_integral_value():
+            return None, f"Ignored {_code(f'{key}={raw}')}: expected a whole number."
+
+        clamped: str | None = None
+        if spec.min is not None and exact < Decimal(str(spec.min)):
+            exact = Decimal(int(spec.min))
+            clamped = "below"
+        elif spec.max is not None and exact > Decimal(str(spec.max)):
+            exact = Decimal(int(spec.max))
+            clamped = "above"
+
+        if exact < _MIN_SAFE_INTEGER or exact > _MAX_SAFE_INTEGER:
+            return None, (
+                f"Ignored {_code(f'{key}={raw}')}: whole numbers must be between "
+                f"{_code(_MIN_SAFE_INTEGER)} and {_code(_MAX_SAFE_INTEGER)}."
+            )
+
+        int_value = int(exact)
+        if clamped == "below":
+            return int_value, (
+                f"{_code(f'{key}={raw}')} is below the minimum for "
+                f"{_code(spec.label)}; used "
+                f"{_code(_format_value(int_value, spec))} instead."
+            )
+        if clamped == "above":
+            return int_value, (
+                f"{_code(f'{key}={raw}')} is above the maximum for "
+                f"{_code(spec.label)}; used "
+                f"{_code(_format_value(int_value, spec))} instead."
+            )
+        return int_value, None
+
+    if spec.type == "number":
         text = raw.strip()
         try:
             number = float(text)
@@ -183,24 +236,19 @@ def _parse_value(raw: str, spec: Parameter, key: str) -> tuple[Any | None, str |
             return None, f"Ignored {_code(f'{key}={raw}')}: expected a number."
         if not math.isfinite(number):
             return None, f"Ignored {_code(f'{key}={raw}')}: expected a finite number."
-        if spec.type == "integer" and number != int(number):
-            return None, f"Ignored {_code(f'{key}={raw}')}: expected a whole number."
-
-        cast: Any = int if spec.type == "integer" else float
-        value = cast(number)
-        if spec.min is not None and value < spec.min:
-            value = cast(spec.min)
-            return value, (
+        if spec.min is not None and number < spec.min:
+            number = float(spec.min)
+            return number, (
                 f"{_code(f'{key}={raw}')} is below the minimum for "
-                f"{_code(spec.label)}; used {_code(_format_value(value, spec))} instead."
+                f"{_code(spec.label)}; used {_code(_format_value(number, spec))} instead."
             )
-        if spec.max is not None and value > spec.max:
-            value = cast(spec.max)
-            return value, (
+        if spec.max is not None and number > spec.max:
+            number = float(spec.max)
+            return number, (
                 f"{_code(f'{key}={raw}')} is above the maximum for "
-                f"{_code(spec.label)}; used {_code(_format_value(value, spec))} instead."
+                f"{_code(spec.label)}; used {_code(_format_value(number, spec))} instead."
             )
-        return value, None
+        return number, None
 
     if spec.type == "boolean":
         lowered = raw.strip().lower()
@@ -241,13 +289,13 @@ def encode_state(
 
     specs: dict[str, Parameter] = model.parameter_specs or {}
     for param_id, spec in specs.items():
-        if is_reserved(param_id) or param_id not in params:
+        if param_id not in params:
             continue
         current = native_value(params[param_id], spec)
         default = native_value(spec.default, spec)
         if current == default:
             continue
-        query[param_id] = _format_value(current, spec)
+        query[_param_key(param_id)] = _format_value(current, spec)
 
     query.update(_encode_scenarios(model, scenarios))
     return query
@@ -291,11 +339,20 @@ def _encode_scenarios(
 def _quote_id(scen_id: str) -> str:
     """Percent-encode a scenario id for the comma-separated ``scenarios`` list.
 
-    Ordinary ids (``22_cases``) pass through untouched; only ids containing a
-    comma -- which the schema permits -- are escaped, so the list stays
-    unambiguous without becoming unreadable in the common case.
+    Ordinary ids (``22_cases``) pass through untouched. Delimiters are escaped,
+    and an empty id uses a token that cannot collide with a literal id, so the
+    list stays unambiguous without becoming unreadable in the common case.
     """
+    if scen_id == "":
+        return _EMPTY_SCENARIO_ID_TOKEN
     return quote(scen_id, safe="")
+
+
+def _unquote_id(token: str) -> str:
+    """Reverse :func:`_quote_id` without conflating empty and literal ids."""
+    if token == _EMPTY_SCENARIO_ID_TOKEN:
+        return ""
+    return unquote(token)
 
 
 def _fallback_label(index: int) -> str:
@@ -325,21 +382,32 @@ def decode_state(
 
     specs: dict[str, Parameter] = model.parameter_specs or {}
     for param_id, spec in specs.items():
-        if is_reserved(param_id) or param_id not in query:
+        key = _param_key(param_id)
+        if key not in query:
             continue
-        value, warning = _parse_value(query[param_id], spec, param_id)
+        value, warning = _parse_value(query[key], spec, key)
         if warning is not None:
             warnings.append(warning)
         if value is not None:
             values[param_id] = value
 
-    # A scenario variable at the top level is a plausible hand-editing mistake:
-    # it belongs under a scenario id, so say so rather than ignoring it.
+    # A scenario variable under param. is a plausible hand-editing mistake: it
+    # belongs under a scenario id, so say so rather than ignoring it.
     for var_name, spec in (model.scenario_parameter_specs or {}).items():
-        if var_name in query and var_name not in specs:
+        key = _param_key(var_name)
+        if key in query and var_name not in specs:
             warnings.append(
-                f"Ignored {_code(f'{var_name}={query[var_name]}')}: {_code(spec.label)} "
+                f"Ignored {_code(f'{key}={query[key]}')}: {_code(spec.label)} "
                 f"is set per scenario, as {_code(f'{_SCEN_PREFIX}<scenario>.{var_name}')}."
+            )
+
+    # So is dropping the namespace entirely. Bare parameter names look right and
+    # would otherwise be ignored as unknown keys, leaving defaults in place.
+    for param_id in _unique([*specs, *(model.scenario_parameter_specs or {})]):
+        if param_id in query and not is_reserved(param_id):
+            warnings.append(
+                f"Ignored {_code(f'{param_id}={query[param_id]}')}: parameters need "
+                f"the {_code(_PARAM_PREFIX)} prefix, as {_code(_param_key(param_id))}."
             )
 
     scenarios = _decode_scenarios(model, query, warnings)
@@ -352,7 +420,7 @@ def _split_scen_key(key: str) -> tuple[str, str] | None:
     Uses the *last* dot as the separator, so scenario ids containing dots work.
     """
     scen_id, separator, scen_field = key[len(_SCEN_PREFIX) :].rpartition(".")
-    if not separator or not scen_id:
+    if not separator:
         return None
     return scen_id, scen_field
 
@@ -374,7 +442,8 @@ def _decode_scenarios(
 
     raw_order = query.get(SCENARIOS_KEY)
     if raw_order is not None:
-        requested = _unique(unquote(part.strip()) for part in raw_order.split(","))
+        tokens = [part.strip() for part in raw_order.split(",") if part.strip()]
+        requested = _unique(_unquote_id(token) for token in tokens)
         if not requested:
             warnings.append(
                 f"Ignored {_code(f'{SCENARIOS_KEY}={raw_order}')}: no scenario ids."
@@ -445,11 +514,11 @@ def _decode_scenarios(
 
 
 def _unique(items: Any) -> list[str]:
-    """Drop blanks and duplicates while preserving order."""
+    """Drop duplicates while preserving order."""
     seen: set[str] = set()
     result: list[str] = []
     for item in items:
-        if item and item not in seen:
+        if item not in seen:
             seen.add(item)
             result.append(item)
     return result
@@ -460,15 +529,21 @@ def _unique(items: Any) -> list[str]:
 # --------------------------------------------------------------------------
 
 
-def read_url_state(registry: dict[str, BaseSimulationModel]) -> UrlState | None:
-    """Read the current query string. Returns ``None`` when no model is named."""
+def read_url_state(
+    registry: dict[str, BaseSimulationModel],
+    *,
+    preferred_label: str | None = None,
+) -> UrlState | None:
+    """Read the query string, using an explicit selection to break slug ties."""
     query = st.query_params.to_dict()
     slug = query.get(MODEL_KEY, "").strip()
     if not slug:
         return None
 
     candidates = build_slug_registry(registry).get(slug, [])
-    if len(candidates) > 1:
+    if preferred_label is not None and preferred_label in candidates:
+        label = preferred_label
+    elif len(candidates) > 1:
         return UrlState(
             slug=slug,
             warnings=[
@@ -476,7 +551,7 @@ def read_url_state(registry: dict[str, BaseSimulationModel]) -> UrlState | None:
                 "goes by that name. Pick the one you meant from the model list."
             ],
         )
-    if not candidates:
+    elif not candidates:
         return UrlState(
             slug=slug,
             warnings=[
@@ -484,8 +559,9 @@ def read_url_state(registry: dict[str, BaseSimulationModel]) -> UrlState | None:
                 "loaded here. Load that model and the link's values will be applied."
             ],
         )
+    else:
+        label = candidates[0]
 
-    label = candidates[0]
     values, scenarios, warnings = decode_state(registry[label], query)
     return UrlState(
         slug=slug,
