@@ -55,10 +55,17 @@ Because links carry changes rather than a full snapshot, a link opened after the
 defaults change will pick up the new defaults for everything it does not mention. Use the
 parameter export (**Save Changes as Preset**) when you need a calculation pinned exactly.
 
-Keys the app does not recognise are ignored, and values that cannot be honoured — a
-number past its allowed range, an unknown option, a typo — are clamped or dropped with a
-warning shown in the app rather than failing silently. `model` and `scenarios` are
-reserved key names and cannot be used as parameter ids.
+Keys the app does not recognise are ignored. Values that cannot be honoured are reported
+with a warning in the app rather than failing silently: a number past its allowed range
+is clamped to the range, and an unknown option, a fractional value for a whole-number
+parameter, or a misspelled key is dropped. `model`, `scenarios`, and Streamlit's own
+`embed` and `embed_options` are reserved key names and cannot be used as parameter ids.
+
+Two cases produce no link. A model that isn't loaded in the browser — an uploaded one, or
+one from a newer version of the app — leaves the link pending with a warning; load that
+model and its values are applied then. And while you are trying unsaved edits from the
+model editor, the URL is cleared, because a link can carry parameter values but not the
+edits themselves, so it would reopen the saved model showing different numbers.
 
 ## Versioning and release notes
 

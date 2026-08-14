@@ -1,6 +1,6 @@
 [project]
 name = "epicc"
-version = "0.2.0"
+version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "streamlit>=1.55.0",

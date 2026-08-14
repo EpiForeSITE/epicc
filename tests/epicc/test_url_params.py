@@ -6,13 +6,22 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from epicc.model.base import BaseSimulationModel
+from epicc.model.factory import create_model_instance
 from epicc.model.models import get_all_models
-from epicc.model.schema import Scenario, ScenarioVars
+from epicc.model.schema import (
+    Equation,
+    Model,
+    Parameter,
+    Scenario,
+    ScenarioVars,
+    TableBlock,
+    TableRow,
+)
 from epicc.ui.url_params import (
-    RESERVED_KEYS,
     build_slug_registry,
     decode_state,
     encode_state,
+    is_reserved,
     model_slug,
 )
 
@@ -33,6 +42,31 @@ def measles(registry: dict[str, BaseSimulationModel]) -> BaseSimulationModel:
 @pytest.fixture
 def tb(registry: dict[str, BaseSimulationModel]) -> BaseSimulationModel:
     return registry[TB_LABEL]
+
+
+@pytest.fixture
+def text_model() -> BaseSimulationModel:
+    """A model with a string parameter -- neither shipped model has one."""
+    return create_model_instance(
+        Model(
+            title="Text Model",
+            description="Exercises string-typed parameters",
+            parameters={
+                "region": Parameter(type="string", label="Region", default="north"),
+                "n_items": Parameter(type="integer", label="Items", default=5, min=1),
+            },
+            equations={"eq_total": Equation(label="Total", compute="n_items * 1")},
+            scenarios=[
+                Scenario(id="only", label="Only", vars=ScenarioVars()),
+            ],
+            report=[
+                TableBlock(
+                    type="table", rows=[TableRow(label="Total", value="eq_total")]
+                )
+            ],
+            groups=["region", "n_items"],
+        )
+    )
 
 
 def defaults_of(model: BaseSimulationModel) -> dict[str, Any]:
@@ -62,9 +96,21 @@ def test_slug_registry_maps_back_to_labels(
     registry: dict[str, BaseSimulationModel],
 ) -> None:
     assert build_slug_registry(registry) == {
-        "measles": MEASLES_LABEL,
-        "tb_isolation": TB_LABEL,
+        "measles": [MEASLES_LABEL],
+        "tb_isolation": [TB_LABEL],
     }
+
+
+def test_slug_registry_keeps_collisions(
+    registry: dict[str, BaseSimulationModel],
+) -> None:
+    # An uploaded measles.yaml lands under a different label but the same slug.
+    shadowed = {**registry, "[Custom] measles": registry[MEASLES_LABEL]}
+
+    assert build_slug_registry(shadowed)["measles"] == [
+        MEASLES_LABEL,
+        "[Custom] measles",
+    ]
 
 
 def test_shipped_models_avoid_reserved_parameter_names(
@@ -74,7 +120,16 @@ def test_shipped_models_avoid_reserved_parameter_names(
         names = set(model.parameter_specs or {}) | set(
             model.scenario_parameter_specs or {}
         )
-        assert not (names & RESERVED_KEYS), model.human_name()
+        assert not [name for name in names if is_reserved(name)], model.human_name()
+
+
+@pytest.mark.parametrize(
+    "name", ["model", "scenarios", "embed", "embed_options", "Embed", "EMBED_OPTIONS"]
+)
+def test_reserved_names_include_streamlits_own_case_insensitively(name: str) -> None:
+    # st.query_params.from_dict raises StreamlitAPIException on embed keys, so
+    # writing one would crash the app rather than produce a bad link.
+    assert is_reserved(name)
 
 
 # --------------------------------------------------------------------------
@@ -137,10 +192,22 @@ def test_changed_scenario_set_emits_an_order_key(measles: BaseSimulationModel) -
     }
 
 
-def test_slug_override_names_a_different_model(measles: BaseSimulationModel) -> None:
-    query = encode_state(measles, defaults_of(measles), None, slug="elsewhere")
+def test_scenario_ids_with_commas_stay_unambiguous(
+    measles: BaseSimulationModel,
+) -> None:
+    # Scenario.id is an unconstrained string, so a comma would otherwise split
+    # one scenario into two on the way back in.
+    scenarios = [
+        Scenario(id="alpha,beta", label="Scenario 1", vars=ScenarioVars(n_cases=22)),
+        Scenario(id="gamma", label="Scenario 2", vars=ScenarioVars(n_cases=40)),
+    ]
 
-    assert query["model"] == "elsewhere"
+    query = encode_state(measles, defaults_of(measles), scenarios)
+    assert query["scenarios"] == "alpha%2Cbeta,gamma"
+
+    _, decoded, _ = decode_state(measles, query)
+    assert decoded is not None
+    assert [s.id for s in decoded] == ["alpha,beta", "gamma"]
 
 
 # --------------------------------------------------------------------------
@@ -251,6 +318,28 @@ def test_value_below_minimum_is_clamped_with_a_warning(
     assert "below the minimum" in warnings[0]
 
 
+def test_fractional_value_for_an_integer_is_rejected_not_truncated(
+    measles: BaseSimulationModel,
+) -> None:
+    values, _, warnings = decode_state(
+        measles, {"model": "measles", "quarantine_days": "10.5"}
+    )
+
+    assert values == {}
+    assert warnings == ["Ignored `quarantine_days=10.5`: expected a whole number."]
+
+
+def test_integral_float_is_accepted_for_an_integer(
+    measles: BaseSimulationModel,
+) -> None:
+    values, _, warnings = decode_state(
+        measles, {"model": "measles", "quarantine_days": "10.0"}
+    )
+
+    assert values == {"quarantine_days": 10}
+    assert warnings == []
+
+
 def test_unparseable_number_is_dropped_with_a_warning(
     measles: BaseSimulationModel,
 ) -> None:
@@ -297,6 +386,26 @@ def test_override_for_an_absent_scenario_is_reported(
     assert warnings == ["Ignored `scen.nope.n_cases`: no scenario with id `nope`."]
 
 
+def test_misspelled_scenario_field_is_reported(measles: BaseSimulationModel) -> None:
+    # The scenario id is real, so this would otherwise be dropped in silence and
+    # quietly run the default 22-case calculation.
+    _, _, warnings = decode_state(
+        measles, {"model": "measles", "scen.22_cases.n_case": "30"}
+    )
+
+    assert warnings == [
+        "Ignored `scen.22_cases.n_case`: scenarios accept `label, n_cases`."
+    ]
+
+
+def test_scenario_key_without_a_field_is_reported(
+    measles: BaseSimulationModel,
+) -> None:
+    _, _, warnings = decode_state(measles, {"model": "measles", "scen.22_cases": "30"})
+
+    assert warnings == ["Ignored `scen.22_cases`: expected `scen.<scenario>.<field>`."]
+
+
 def test_too_many_scenarios_are_truncated(measles: BaseSimulationModel) -> None:
     ids = ",".join(f"s{i}" for i in range(12))
 
@@ -307,6 +416,67 @@ def test_too_many_scenarios_are_truncated(measles: BaseSimulationModel) -> None:
     assert scenarios is not None
     assert len(scenarios) == 10
     assert any("only the first 10" in w for w in warnings)
+
+
+def test_string_values_keep_their_surrounding_whitespace(
+    text_model: BaseSimulationModel,
+) -> None:
+    # Stripping here would make encoding and decoding non-inverse: the value
+    # goes out with its spaces and would silently come back without them.
+    query = encode_state(text_model, {"region": "  north  ", "n_items": 5})
+    assert query["region"] == "  north  "
+
+    values, _, warnings = decode_state(text_model, query)
+    assert values == {"region": "  north  "}
+    assert warnings == []
+
+
+def test_scenario_labels_keep_their_surrounding_whitespace(
+    measles: BaseSimulationModel,
+) -> None:
+    _, scenarios, _ = decode_state(
+        measles, {"model": "measles", "scen.22_cases.label": "  Small  "}
+    )
+
+    assert scenarios is not None
+    assert scenarios[0].label == "  Small  "
+
+
+# --------------------------------------------------------------------------
+# Warning rendering -- st.warning renders Markdown, and these strings quote
+# text taken straight from the URL.
+# --------------------------------------------------------------------------
+
+
+def test_warnings_cannot_break_out_of_their_code_span(
+    measles: BaseSimulationModel,
+) -> None:
+    # A backtick would close the span and let the rest render as Markdown --
+    # here, a remote image pulled into trusted app chrome.
+    injection = "`![pwned](https://example.invalid/x.png)"
+
+    _, _, warnings = decode_state(
+        measles, {"model": "measles", "vaccination_rate": injection}
+    )
+
+    assert len(warnings) == 1
+    before, quoted, after = warnings[0].split("`")
+    assert before == "Ignored "
+    assert quoted == "vaccination_rate=![pwned](https://example.invalid/x.png)"
+    assert after == ": expected a number."
+
+
+def test_warnings_flatten_newlines_and_truncate_long_values(
+    measles: BaseSimulationModel,
+) -> None:
+    _, _, warnings = decode_state(
+        measles, {"model": "measles", "vaccination_rate": "a\n\nb" + "x" * 500}
+    )
+
+    assert len(warnings) == 1
+    assert "\n" not in warnings[0]
+    assert len(warnings[0]) < 200
+    assert "..." in warnings[0]
 
 
 # --------------------------------------------------------------------------
@@ -397,3 +567,63 @@ def test_app_warns_when_the_link_names_an_unknown_model() -> None:
     assert not app.exception
     assert app.session_state["model_selector"] is None
     assert any("no_such_model" in w.value for w in app.warning)
+
+
+def test_app_keeps_an_unresolved_link_pending_until_its_model_loads() -> None:
+    # The link names a model the session doesn't have yet. Discarding it here
+    # would open the model at its own defaults once it finally showed up.
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "later", "contacts_per_case": "200"})
+
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.session_state["model_selector"] is None
+    assert "_url_params_applied" not in app.session_state
+
+    # The model arrives, exactly as uploading a custom model would deliver it.
+    definition = get_all_models()[0].get_model_definition()
+    app.session_state["custom_models"] = {
+        "later": create_model_instance(definition, source_path="later.yaml")
+    }
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state["model_selector"] == "later"
+    assert app.session_state["later:contacts_per_case"] == 200.0
+
+
+def test_app_publishes_no_link_while_previewing_an_edited_model() -> None:
+    # A preview's values are diffed against the edited defaults, so any link
+    # written here would reopen the saved model showing different numbers.
+    measles_model = next(m for m in get_all_models() if m.human_name() == MEASLES_LABEL)
+    edited = measles_model.get_model_definition().model_copy(deep=True)
+    edited.parameters["vaccination_rate"].default = 0.9
+
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "measles", "contacts_per_case": "200"})
+    app.session_state["epicc_editor_preview_model"] = create_model_instance(edited)
+    app.session_state["epicc_editor_preview_label"] = MEASLES_LABEL
+    # Match the rerun that "Try in Calculator" produces: the model is already
+    # active, so sync_active_model won't discard the preview.
+    app.session_state["active_model_key"] = MEASLES_LABEL
+    app.session_state["model_selector"] = MEASLES_LABEL
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state["model_selector"] == MEASLES_LABEL
+    assert dict(app.query_params) == {}
+
+
+def test_app_escapes_query_text_in_warnings() -> None:
+    app = AppTest.from_file("app.py")
+    app.query_params["model"] = "`![pwned](https://example.invalid/x.png)"
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    warned = [w.value for w in app.warning if "pwned" in w.value]
+    assert len(warned) == 1
+    # Balanced delimiters mean the injected Markdown stayed inside the span.
+    assert warned[0].count("`") == 2

@@ -42,7 +42,7 @@ from epicc.ui.state import (
     sync_active_model,
 )
 from epicc.ui.styles import load_styles, render_brand_header
-from epicc.ui.url_params import model_slug, read_url_state, write_url_state
+from epicc.ui.url_params import clear_url_state, read_url_state, write_url_state
 
 st.set_page_config(page_title=CONFIG.app.title, layout="wide")
 load_styles(CONFIG.brand)
@@ -53,18 +53,24 @@ model_registry: dict[str, BaseSimulationModel] = {m.human_name(): m for m in all
 model_registry.update(get_custom_models())
 
 # Restore model selection and parameters from URL query string on first load.
+# A link naming a model that isn't loaded yet stays pending rather than being
+# discarded: the user may still upload that model, and the values should land
+# when they do. Only the warning is one-shot, so it doesn't repeat every rerun.
 _URL_APPLIED_KEY = "_url_params_applied"
 _URL_WARNINGS_KEY = "_url_params_warnings"
+_URL_WARNED_KEY = "_url_params_warned"
 if not st.session_state.get(_URL_APPLIED_KEY):
-    # Set unconditionally so the restore is genuinely one-shot, even when the
-    # link names a model we don't have.
-    st.session_state[_URL_APPLIED_KEY] = True
     _url_state = read_url_state(model_registry)
-    if _url_state is not None:
-        if _url_state.warnings:
+    if _url_state is None:
+        st.session_state[_URL_APPLIED_KEY] = True
+    else:
+        if _url_state.warnings and not st.session_state.get(_URL_WARNED_KEY):
+            st.session_state[_URL_WARNED_KEY] = True
             st.session_state[_URL_WARNINGS_KEY] = _url_state.warnings
-        if _url_state.model_label is not None:
+        if _url_state.resolved:
+            st.session_state[_URL_APPLIED_KEY] = True
             _url_label = _url_state.model_label
+            assert _url_label is not None  # Type narrowing for mypy
             st.session_state["model_selector"] = _url_label
             # Activate the model and populate its keyed widgets before they render.
             _url_params = sync_active_model(_url_label)
@@ -258,7 +264,8 @@ using_preview = preview_model is not None and preview_label == selected_label
 if using_preview and preview_model is not None:
     active_model = preview_model
     st.warning(
-        "You're trying an unsaved, edited version of this model. Nothing is saved yet."
+        "You're trying an unsaved, edited version of this model. Nothing is saved "
+        "yet, and this state can't be shared as a link."
     )
 
 param_col, result_col = st.columns([2, 3], gap="large")
@@ -274,14 +281,19 @@ with param_col:
             )
         )
 
-        # Keep the URL in sync with current parameter values. A preview model has
-        # no source file, so name the selected model in the link instead.
-        write_url_state(
-            active_model,
-            params,
-            scenario_overrides,
-            slug=model_slug(model_registry[selected_label]),
-        )
+        # We're rendering a model, so any link still waiting on an unavailable
+        # one no longer applies.
+        st.session_state[_URL_APPLIED_KEY] = True
+
+        if using_preview:
+            # A preview's values are diffed against the *edited* defaults and its
+            # equation changes can't be expressed at all, so any link written here
+            # would reopen the saved model showing different numbers. Publish
+            # nothing rather than something misleading.
+            clear_url_state()
+        else:
+            # Keep the URL in sync with current parameter values.
+            write_url_state(active_model, params, scenario_overrides)
 
         typed_params = None
         if not has_input_errors:
