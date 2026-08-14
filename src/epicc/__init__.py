@@ -7,6 +7,6 @@ unavailable there. `pyproject.toml` is kept in step with this value by
 `scripts/bump_version.py` and checked by `tests/epicc/test_version.py`.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = ["__version__"]
