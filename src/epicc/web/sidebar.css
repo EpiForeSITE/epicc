@@ -331,17 +331,6 @@ button[data-testid^="stBaseButton"]:not(
   text-align: center;
 }
 
-@media (min-width: 769px) {
-  .st-key-parameter-panel {
-    align-self: flex-start;
-    max-height: calc(100vh - 2rem);
-    overflow-y: auto;
-    position: sticky;
-    scrollbar-width: thin;
-    top: 1rem;
-  }
-}
-
 @media (max-width: 768px) {
   [data-testid="stMainBlockContainer"] {
     padding-top: 2.5rem;
