@@ -301,6 +301,11 @@ param_col, result_col = st.columns([2, 3], gap="large")
 
 with param_col:
     with st.container(key="parameter-panel") as parameter_panel:
+        # Run sits at the top of the panel so it is visible without scrolling
+        # past every parameter, but whether it is enabled is only known once the
+        # widgets below have rendered. Reserve the slot now, fill it last.
+        run_slot = st.container(key="run-action-row")
+
         params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = (
             render_sidebar_parameters(
                 active_model,
@@ -376,8 +381,7 @@ with param_col:
             disabled=not is_dirty,
         )
 
-        st.divider()
-        run_clicked = st.button(
+        run_clicked = run_slot.button(
             "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
         )
 
