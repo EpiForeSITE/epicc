@@ -27,6 +27,39 @@ https://epiworldpythonapp.streamlit.app/
 
 Please follow instructions in your console for loading development versions.
 
+## Sharing a calculation by URL
+
+The address bar is a permalink. As you change parameters the app rewrites the query
+string, so copying the URL is enough to hand someone the exact calculation you are
+looking at.
+
+The query string is meant to be read — and edited — by hand:
+
+```
+https://epiworldpythonapp.streamlit.app/?model=measles&vaccination_rate=0.9&scen.22_cases.label=Small+outbreak&scen.22_cases.n_cases=30
+```
+
+| Key | Meaning |
+| --- | --- |
+| `model` | Which model to open, named by its YAML file stem (`measles`, `tb_isolation`). Required. |
+| `<parameter>` | A parameter value, keyed by its id in the model YAML. |
+| `scen.<scenario>.<variable>` | A scenario variable, keyed by scenario id. |
+| `scen.<scenario>.label` | A scenario's display label. |
+| `scenarios` | Comma-separated scenario ids, in order. Only needed if you add, remove, or reorder scenarios. |
+
+Only values that differ from the model's defaults appear, so a link shows exactly what
+was changed and nothing else. Open a model without changing anything and the URL stays
+at `?model=measles`.
+
+Because links carry changes rather than a full snapshot, a link opened after the model's
+defaults change will pick up the new defaults for everything it does not mention. Use the
+parameter export (**Save Changes as Preset**) when you need a calculation pinned exactly.
+
+Keys the app does not recognise are ignored, and values that cannot be honoured — a
+number past its allowed range, an unknown option, a typo — are clamped or dropped with a
+warning shown in the app rather than failing silently. `model` and `scenarios` are
+reserved key names and cannot be used as parameter ids.
+
 ## Versioning and release notes
 
 The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The

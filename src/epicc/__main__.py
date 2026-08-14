@@ -42,7 +42,7 @@ from epicc.ui.state import (
     sync_active_model,
 )
 from epicc.ui.styles import load_styles, render_brand_header
-from epicc.ui.url_params import read_url_params, write_url_params
+from epicc.ui.url_params import model_slug, read_url_state, write_url_state
 
 st.set_page_config(page_title=CONFIG.app.title, layout="wide")
 load_styles(CONFIG.brand)
@@ -54,31 +54,34 @@ model_registry.update(get_custom_models())
 
 # Restore model selection and parameters from URL query string on first load.
 _URL_APPLIED_KEY = "_url_params_applied"
+_URL_WARNINGS_KEY = "_url_params_warnings"
 if not st.session_state.get(_URL_APPLIED_KEY):
-    _url_result = read_url_params()
-    if _url_result is not None:
-        _url_model, _url_values, _url_scenarios = _url_result
-        if _url_model in model_registry:
-            st.session_state[_URL_APPLIED_KEY] = True
-            st.session_state["model_selector"] = _url_model
+    # Set unconditionally so the restore is genuinely one-shot, even when the
+    # link names a model we don't have.
+    st.session_state[_URL_APPLIED_KEY] = True
+    _url_state = read_url_state(model_registry)
+    if _url_state is not None:
+        if _url_state.warnings:
+            st.session_state[_URL_WARNINGS_KEY] = _url_state.warnings
+        if _url_state.model_label is not None:
+            _url_label = _url_state.model_label
+            st.session_state["model_selector"] = _url_label
             # Activate the model and populate its keyed widgets before they render.
-            _url_params = sync_active_model(_url_model)
+            _url_params = sync_active_model(_url_label)
             set_active_param_identity(DEFAULT_PARAM_IDENTITY)
-            _url_active_model = model_registry[_url_model]
+            _url_active_model = model_registry[_url_label]
             reset_parameters_to_defaults(
-                _url_values,
+                _url_state.params,
                 _url_params,
-                _url_model,
+                _url_label,
                 param_specs=_url_active_model.parameter_specs,
             )
-            if _url_scenarios:
+            if _url_state.scenarios:
                 reset_scenario_state(
-                    _url_model,
-                    _url_scenarios,
+                    _url_label,
+                    _url_state.scenarios,
                     _url_active_model.scenario_parameter_specs or {},
                 )
-    else:
-        st.session_state[_URL_APPLIED_KEY] = True
 
 _EDITOR_MODE_KEY = "epicc_editor_mode"
 _MODEL_SELECT_KEY = "model_selector"
@@ -145,6 +148,9 @@ elif selected_label is not None:
 
 st.divider()
 
+for _url_warning in st.session_state.pop(_URL_WARNINGS_KEY, []):
+    st.warning(_url_warning)
+
 if selected_label is None:
     if in_editor:
 
@@ -182,9 +188,12 @@ implications of different policy scenarios.
    values it uses. Read the parameter descriptions before you run, and treat outputs
    with the caveats in mind.
 
- - **Save and share your work:** Export your current parameters and send them to a
-   colleague, so they can pick up exactly where you left off, or reload them yourself
-   any time you want to revisit the analysis.
+ - **Share a link:** The address bar tracks whatever you change, in plain text, so
+   copying the URL hands a colleague the exact calculation you're looking at. You can
+   read the link, and edit it, before you send it.
+
+ - **Save your work:** Export your current parameters to a file and reload them any
+   time you want to revisit the analysis.
 
  - **Generate a report:** Once you've run a simulation, save the results page as a PDF
    to share directly with stakeholders.{_releases_line}
@@ -265,8 +274,14 @@ with param_col:
             )
         )
 
-        # Keep the URL in sync with current parameter values.
-        write_url_params(selected_label, params, scenario_overrides)
+        # Keep the URL in sync with current parameter values. A preview model has
+        # no source file, so name the selected model in the link instead.
+        write_url_state(
+            active_model,
+            params,
+            scenario_overrides,
+            slug=model_slug(model_registry[selected_label]),
+        )
 
         typed_params = None
         if not has_input_errors:
