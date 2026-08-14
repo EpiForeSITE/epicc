@@ -3,6 +3,8 @@ description: "Estimates hospitalization, tracing, and productivity costs for mea
 authors:
   - name: Edward Wang
   - name: Olivia Banks
+  - name: George G. Vega Yon
+  - name: Richard Nelson
 
 parameters:
   n_cases:
