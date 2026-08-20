@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import html
 from io import BytesIO
 import importlib.util
+import math
 import re
 import sys
 from typing import Any
@@ -158,34 +160,51 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
 
     title = str(report.get("title", "Report"))
     body_parts.append(_w_paragraph(title, bold=True))
+    body_parts.append(_w_paragraph(" "))
 
     description = str(report.get("description", "")).strip()
     if description:
         body_parts.append(_w_paragraph(description))
+        body_parts.append(_w_paragraph(" "))
 
     sections = report.get("sections", [])
     if isinstance(sections, list):
+        has_rendered_section = False
         for section in sections:
             if not isinstance(section, dict):
                 continue
+
+            if has_rendered_section:
+                body_parts.append(_w_paragraph(" "))
 
             sec_type = str(section.get("type", "")).lower()
 
             if sec_type == "markdown":
                 content = str(section.get("content", ""))
+                has_rendered_markdown_line = False
                 for line in content.splitlines():
                     line = line.strip()
                     if not line or line == "$$":
                         continue
 
                     if line.startswith("### "):
+                        if has_rendered_markdown_line:
+                            body_parts.append(_w_paragraph(" "))
                         body_parts.append(_w_paragraph(_strip_markdown_inline(line[4:]), bold=True))
+                        has_rendered_markdown_line = True
                     elif line.startswith("## "):
+                        if has_rendered_markdown_line:
+                            body_parts.append(_w_paragraph(" "))
                         body_parts.append(_w_paragraph(_strip_markdown_inline(line[3:]), bold=True))
+                        has_rendered_markdown_line = True
                     elif line.startswith("# "):
+                        if has_rendered_markdown_line:
+                            body_parts.append(_w_paragraph(" "))
                         body_parts.append(_w_paragraph(_strip_markdown_inline(line[2:]), bold=True))
+                        has_rendered_markdown_line = True
                     elif line.startswith("- "):
                         body_parts.append(_w_paragraph(f"• {_strip_markdown_inline(line[2:])}"))
+                        has_rendered_markdown_line = True
                     elif re.match(r"^\d+\.\s+", line):
                         match = re.match(r"^(\d+)\.\s+(.*)$", line)
                         if match:
@@ -193,20 +212,18 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
                             body_parts.append(_w_paragraph(f"{idx}. {_strip_markdown_inline(content_line)}"))
                         else:
                             body_parts.append(_w_paragraph(_strip_markdown_inline(line)))
+                        has_rendered_markdown_line = True
                     else:
                         body_parts.append(_w_paragraph(_strip_markdown_inline(_latex_to_text(line))))
+                        has_rendered_markdown_line = True
+                has_rendered_section = True
 
             elif sec_type in {"table", "graph"}:
                 sec_title = str(section.get("title", "")).strip()
                 caption = str(section.get("caption", "")).strip()
-                graph_kind = str(section.get("kind", "")).strip()
 
-                if sec_title:
+                if sec_type == "table" and sec_title:
                     body_parts.append(_w_paragraph(sec_title, bold=True))
-                if sec_type == "graph" and graph_kind:
-                    body_parts.append(_w_paragraph(f"Chart type: {graph_kind}"))
-                if caption:
-                    body_parts.append(_w_paragraph(caption))
 
                 rows = section.get("rows", [])
                 if isinstance(rows, list):
@@ -242,20 +259,23 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
                                     f"media/{media_name}",
                                 )
                             )
+                            body_parts.append(_w_paragraph(" "))
                             body_parts.append(
                                 _w_image(
                                     relationship_id=rid,
                                     name=sec_title or "Chart",
-                                    width_px=700,
-                                    height_px=390,
+                                    width_px=820,
+                                    height_px=460,
                                 )
                             )
+                            body_parts.append(_w_paragraph(" "))
                         else:
                             body_parts.append(
                                 _w_paragraph(
                                     "Chart image export unavailable in this runtime; included chart data table above."
                                 )
                             )
+                has_rendered_section = True
 
     document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document
@@ -389,8 +409,10 @@ def _w_image(
     width_px: int,
     height_px: int,
 ) -> str:
-    width_emu = width_px * 9525
-    height_emu = height_px * 9525
+    # Keep exported DOCX charts at a fixed page-friendly width (17 cm),
+    # while preserving the original aspect ratio.
+    width_emu = 17 * 360000
+    height_emu = int(width_emu * (height_px / max(width_px, 1)))
     safe_name = _escape_xml(name)
     return (
         "<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r>"
@@ -502,8 +524,24 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
 
         if kind == "bar":
             fig.update_layout(barmode="group")
+            _apply_yaxis_ticks(fig, [
+                _coerce_float(values_map.get(s, 0))
+                for row in rows
+                if isinstance(row, dict)
+                for values_map in [row.get("raw_values") if isinstance(row.get("raw_values"), dict) else row.get("values", {})]
+                if isinstance(values_map, dict)
+                for s in scenario_names
+            ])
         elif kind == "stacked_bar":
             fig.update_layout(barmode="stack")
+            _apply_yaxis_ticks(fig, [
+                _coerce_float(values_map.get(s, 0))
+                for row in rows
+                if isinstance(row, dict)
+                for values_map in [row.get("raw_values") if isinstance(row.get("raw_values"), dict) else row.get("values", {})]
+                if isinstance(values_map, dict)
+                for s in scenario_names
+            ])
 
     elif kind == "pie":
         first_scenario = scenario_names[0]
@@ -527,16 +565,31 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
                 marker={"colors": [list(plotly_colors.qualitative.Plotly)[i % len(plotly_colors.qualitative.Plotly)] for i in range(len(labels))]},
             )
         )
-        fig.update_layout(title_text=first_scenario)
+        default_title = first_scenario
 
     else:
         return None
 
+    section_title = str(section.get("title", "")).strip()
+    section_subtitle = str(section.get("caption", "")).strip()
+    if kind == "pie":
+        title_main = section_title or default_title
+    else:
+        title_main = section_title
+
+    title_html = html.escape(title_main)
+    if section_subtitle:
+        title_html = f"{title_html}<br><sup>{html.escape(section_subtitle)}</sup>"
+
     palette = list(plotly_colors.qualitative.Plotly)
+    chart_top_margin = 132 if kind in {"bar", "stacked_bar", "line"} else 92
     fig.update_layout(
-        margin={"t": 24, "b": 24, "l": 24, "r": 16},
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
+        title={"text": title_html, "x": 0.5, "xanchor": "center", "y": 0.90, "yanchor": "top"},
+        margin={"t": chart_top_margin, "b": 24, "l": 24, "r": 16},
+        # Use an opaque white canvas for exported images so labels remain
+        # readable when DOCX viewers are in dark mode.
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         template="plotly",
         colorway=palette,
         legend_title_text="Component",
@@ -544,6 +597,39 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
         hovermode="x unified",
     )
     return fig
+
+
+def _apply_yaxis_ticks(fig: go.Figure, values: list[float]) -> None:
+    positive_values = [abs(v) for v in values if v is not None]
+    if not positive_values:
+        return
+
+    max_value = max(positive_values)
+    dtick = _nice_dtick(max_value, target_ticks=8)
+    tickformat = ",.2f" if dtick < 0.1 else (",.1f" if dtick < 1 else ",.0f")
+    fig.update_yaxes(tickmode="linear", dtick=dtick, tickformat=tickformat)
+
+
+def _nice_dtick(max_value: float, target_ticks: int = 8) -> float:
+    if max_value <= 0:
+        return 1.0
+
+    raw_step = max_value / max(target_ticks, 1)
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    normalized = raw_step / magnitude
+
+    if normalized <= 1:
+        nice = 1
+    elif normalized <= 2:
+        nice = 2
+    elif normalized <= 2.5:
+        nice = 2.5
+    elif normalized <= 5:
+        nice = 5
+    else:
+        nice = 10
+
+    return nice * magnitude
 
 
 def _coerce_float(value: Any) -> float:

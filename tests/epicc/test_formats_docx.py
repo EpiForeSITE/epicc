@@ -81,7 +81,7 @@ def test_write_contains_markdown_content():
     assert "LaTeX test." in doc_xml
     assert "**" not in doc_xml
     assert "$$" not in doc_xml
-    assert "Chart type: bar" in doc_xml
+    assert "Chart type: bar" not in doc_xml
 
 
 def test_write_contains_chart_image_or_fallback_note():

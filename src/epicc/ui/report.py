@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import html
+import math
 from typing import Any
 
 import uuid
@@ -21,8 +23,8 @@ def _callout(summary: str, detail: str | None = None) -> None:
     )
 
     st.markdown(
-        f"<div style='border:1px solid #e0e0e0; border-radius:4px; "
-        f"padding:0.75rem 1rem; color:#999; background:#fafafa; "
+        f"<div style='border:1px solid var(--secondary-background-color); border-radius:4px; "
+        f"padding:0.75rem 1rem; color:var(--secondary-text-color); background:var(--secondary-background-color); "
         f"font-size:0.85rem;'>{summary}{detail_html}</div>",
         unsafe_allow_html=True,
     )
@@ -170,23 +172,10 @@ class GraphBlockRenderer(BlockRenderer):
 
         # Chart!
         with st.container(key=f'graph-block-{self._uuid}'):
-            if self._block.title:
-                st.markdown(
-                    f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
-                    f"<span style='font-size: 1.1rem; font-weight: 600; color: #1f1f1f;'>"
-                    f"{self._block.title}</span></div>",
-                    unsafe_allow_html=True,
-                )
-
-            if self._block.caption:
-                st.markdown(
-                    f"<div style='text-align: center; margin-bottom: 0.5rem;'>"
-                    f"<span style='font-size: 0.9rem; color: #6c757d;'>"
-                    f"{self._block.caption}</span></div>",
-                    unsafe_allow_html=True
-                )
-
-            st.plotly_chart(fig, width='stretch', key=f'plotly-{self._uuid}')
+            st.markdown("<div style='height: 0.35rem;'></div>", unsafe_allow_html=True)
+            chart_width = "content" if self._block.kind in {"bar", "stacked_bar"} else "stretch"
+            st.plotly_chart(fig, width=chart_width, key=f'plotly-{self._uuid}')
+            st.markdown("<div style='height: 0.65rem;'></div>", unsafe_allow_html=True)
 
     def _resolve_columns(
         self, run_results: dict[str, Any]
@@ -211,6 +200,9 @@ class GraphBlockRenderer(BlockRenderer):
         return ids, labels, results
 
     def _build_figure(self, run_results: dict[str, Any]) -> go.Figure:
+        theme_base = st.get_option("theme.base")
+        theme_template = "plotly_dark" if theme_base == "dark" else "plotly"
+
         _, col_labels, col_results = self._resolve_columns(run_results)
         rows = self._block.rows
         row_labels = [r.label for r in rows]
@@ -226,6 +218,11 @@ class GraphBlockRenderer(BlockRenderer):
                 ]
                 fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
             fig.update_layout(barmode="group", legend_title_text="Component")
+            self._apply_yaxis_ticks(fig, [
+                _raw_value(res.get(row.value, 0))
+                for row in rows
+                for res in col_results
+            ])
 
         elif kind == "stacked_bar":
             fig = go.Figure()
@@ -235,6 +232,11 @@ class GraphBlockRenderer(BlockRenderer):
                 ]
                 fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
             fig.update_layout(barmode="stack", legend_title_text="Component")
+            self._apply_yaxis_ticks(fig, [
+                _raw_value(res.get(row.value, 0))
+                for row in rows
+                for res in col_results
+            ])
 
         elif kind == "line":
             fig = go.Figure()
@@ -246,6 +248,11 @@ class GraphBlockRenderer(BlockRenderer):
                     name=row.label, x=col_labels, y=values, mode="lines+markers"
                 ))
             fig.update_layout(legend_title_text="Component")
+            self._apply_yaxis_ticks(fig, [
+                _raw_value(res.get(row.value, 0))
+                for row in rows
+                for res in col_results
+            ])
 
         elif kind == "pie":
             # Use the first scenario column; rows become pie slices
@@ -259,20 +266,70 @@ class GraphBlockRenderer(BlockRenderer):
                 values=values,
                 hole=0.3,
             ))
-            fig.update_layout(title_text=scenario_label)
+            default_title = scenario_label
 
         else:
             raise ValueError(f"Unknown graph kind: {kind!r}")
 
+        chart_height = 340 if kind == "pie" else 380
+        chart_width = 700 if kind in {"bar", "stacked_bar"} else None
+        chart_top_margin = 132 if kind in {"bar", "stacked_bar", "line"} else 92
+        block_title = (self._block.title or "").strip()
+        block_subtitle = (self._block.caption or "").strip()
+        if kind == "pie":
+            title_main = block_title or default_title
+        else:
+            title_main = block_title
+
+        title_html = html.escape(title_main)
+        if block_subtitle:
+            title_html = f"{title_html}<br><sup>{html.escape(block_subtitle)}</sup>"
+
         fig.update_layout(
-            margin={"t": 40, "b": 20, "l": 0, "r": 0},
+            height=chart_height,
+            width=chart_width,
+            title={"text": title_html, "x": 0.5, "xanchor": "center", "y": 0.90, "yanchor": "top"},
+            margin={"t": chart_top_margin, "b": 20, "l": 0, "r": 0},
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            template="plotly",
+            template=theme_template,
             colorway=list(plotly_colors.qualitative.Plotly),
-            font={"family": "Arial", "size": 12, "color": "#1f2937"},
+            font={"family": "Arial", "size": 12},
         )
         return fig
+
+    @staticmethod
+    def _apply_yaxis_ticks(fig: go.Figure, values: list[float]) -> None:
+        positive_values = [abs(v) for v in values if v is not None]
+        if not positive_values:
+            return
+
+        max_value = max(positive_values)
+        dtick = GraphBlockRenderer._nice_dtick(max_value, target_ticks=8)
+        tickformat = ",.2f" if dtick < 0.1 else (",.1f" if dtick < 1 else ",.0f")
+        fig.update_yaxes(tickmode="linear", dtick=dtick, tickformat=tickformat)
+
+    @staticmethod
+    def _nice_dtick(max_value: float, target_ticks: int = 8) -> float:
+        if max_value <= 0:
+            return 1.0
+
+        raw_step = max_value / max(target_ticks, 1)
+        magnitude = 10 ** math.floor(math.log10(raw_step))
+        normalized = raw_step / magnitude
+
+        if normalized <= 1:
+            nice = 1
+        elif normalized <= 2:
+            nice = 2
+        elif normalized <= 2.5:
+            nice = 2.5
+        elif normalized <= 5:
+            nice = 5
+        else:
+            nice = 10
+
+        return nice * magnitude
 
 
 def _raw_value(value: Any) -> float:
@@ -300,6 +357,7 @@ class ReportRenderer:
     def render(self, run_results: dict[str, Any] | None, *, hint: str | None = None) -> None:
         st.title(self._title)
         st.write(self._description)
+        st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
         if run_results is None and hint:
             st.info(hint)
         for i, renderer in enumerate(self._block_renderers):
