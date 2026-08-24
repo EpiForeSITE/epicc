@@ -17,7 +17,18 @@
 
     const root = document.documentElement;
 
-    function charts() {
+    // Streamlit renders the box first and Plotly fills it in a moment later, so
+    // the boxes are what say whether the report has figures at all, and the
+    // drawn charts are what say whether those figures are ready.
+    function chartBoxes() {
+        return Array.from(
+            document.querySelectorAll(
+                '.st-key-results-report [data-testid="stPlotlyChart"]'
+            )
+        );
+    }
+
+    function drawnCharts() {
         return Array.from(
             document.querySelectorAll('.st-key-results-report .js-plotly-plot')
         ).filter(function (chart) {
@@ -25,11 +36,11 @@
         });
     }
 
-    // A chart has caught up with the print layout once it is as wide as the box
-    // it was drawn into.
+    // Every box holds a chart, and every chart is as wide as the box it was
+    // drawn into.
     function chartsReady() {
-        const drawn = charts();
-        if (!drawn.length) {
+        const drawn = drawnCharts();
+        if (!drawn.length || drawn.length !== chartBoxes().length) {
             return false;
         }
 
@@ -47,7 +58,11 @@
 
             (function poll() {
                 const waited = Date.now() - started;
-                const chartless = !charts().length && waited >= NO_CHART_GRACE_MS;
+                // A report with no chart boxes has no figures to wait for. A
+                // box that has not been filled yet is still a figure, so it
+                // holds the dialog until it is drawn or the timeout gives up.
+                const chartless =
+                    !chartBoxes().length && waited >= NO_CHART_GRACE_MS;
 
                 if (chartsReady() || chartless || waited >= READY_TIMEOUT_MS) {
                     resolve();
