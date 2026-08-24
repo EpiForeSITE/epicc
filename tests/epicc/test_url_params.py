@@ -28,6 +28,7 @@ from epicc.ui.url_params import (
 
 MEASLES_LABEL = "Measles Outbreak Cost Estimation"
 TB_LABEL = "TB Isolation Cost Estimation"
+MEASLES_OR_LABEL = "Measles Outbreak Costs in Oregon"
 
 
 @pytest.fixture(scope="module")
@@ -141,6 +142,7 @@ def test_slug_registry_maps_back_to_labels(
 ) -> None:
     assert build_slug_registry(registry) == {
         "measles": [MEASLES_LABEL],
+        "measles_oregon": [MEASLES_OR_LABEL],
         "tb_isolation": [TB_LABEL],
     }
 
