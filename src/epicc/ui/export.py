@@ -96,21 +96,36 @@ def render_parameter_export_modal(
         _export_dialog(model_name, param_data, unique, pydantic_model)
 
 
+def cancel_print_request() -> None:
+    """Drop a pending print request that can no longer be served."""
+
+    st.session_state[_PRINT_REQUESTED_KEY] = False
+
+
+def _request_print() -> None:
+    if not has_results():
+        return
+
+    st.session_state[_PRINT_REQUESTED_KEY] = True
+    st.session_state[_PRINT_TOKEN_KEY] = st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
+
+
 def render_pdf_export_button(container: Any = None) -> None:
     # Render a direct Save report as PDF button.
+    #
+    # The request is recorded in an on_click callback rather than from the
+    # button's return value. Callbacks run before the rerun, so the flag is
+    # already set wherever trigger_print_if_requested() sits in the page; read
+    # from the return value it was only seen by the rerun *after* the one the
+    # click caused, which is why the button used to need two clicks.
     rc = container if container is not None else st
-    clicked = rc.button(
+    rc.button(
         "Save report as PDF",
         disabled=not has_results(),
         width='stretch',
         type='primary',
+        on_click=_request_print,
     )
-
-    if clicked and has_results():
-        st.session_state[_PRINT_REQUESTED_KEY] = True
-        st.session_state[_PRINT_TOKEN_KEY] = (
-            st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
-        )
 
 
 def trigger_print_if_requested() -> None:

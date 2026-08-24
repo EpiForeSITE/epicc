@@ -12,6 +12,7 @@ from epicc.model.parameters import load_model_params
 from epicc.model.schema import Model
 from epicc.ui.editor import get_current_doc, render_model_editor, validate_doc
 from epicc.ui.export import (
+    cancel_print_request,
     render_parameter_export_modal,
     render_pdf_export_button,
     trigger_print_if_requested,
@@ -386,9 +387,9 @@ with param_col:
         )
 
 with result_col:
-    trigger_print_if_requested()
-
     if typed_params is None:
+        # Nothing printable is going to render this run.
+        cancel_print_request()
         st.warning("Fix parameter errors to enable simulation.")
         st.stop()
 
@@ -411,3 +412,7 @@ with result_col:
 
     st.divider()
     render_pdf_export_button(container=result_col)
+
+    # Last: the print script measures the charts, so it has to reach the browser
+    # after the report they belong to has been rendered.
+    trigger_print_if_requested()
