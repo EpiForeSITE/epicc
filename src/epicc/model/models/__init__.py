@@ -10,6 +10,7 @@ from epicc.model.schema import Model
 MODEL_REGISTRY = [
     "tb_isolation",
     "measles",
+    "measles_oregon",
 ]
 
 

@@ -41,7 +41,7 @@ https://epiworldpythonapp.streamlit.app/?model=measles&param.vaccination_rate=0.
 
 | Key | Meaning |
 | --- | --- |
-| `model` | Which model to open, named by its YAML file stem (`measles`, `tb_isolation`). Required. |
+| `model` | Which model to open, named by its YAML file stem (`measles`, `measles_oregon`, `tb_isolation`). Required. |
 | `param.<parameter>` | An equation parameter value, keyed by its id in the model YAML. |
 | `scen.<scenario>.<variable>` | A scenario variable, keyed by scenario id. |
 | `scen.<scenario>.label` | A scenario's display label. |
