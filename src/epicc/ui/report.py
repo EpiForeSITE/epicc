@@ -178,20 +178,6 @@ class GraphBlockRenderer(BlockRenderer):
 
         # Chart!
         with st.container(key=f"graph-block-{self._uuid}"):
-            if self._block.title:
-                st.markdown(
-                    f"<div class='report-graph-title'>"
-                    f"{html.escape(self._block.title)}</div>",
-                    unsafe_allow_html=True,
-                )
-
-            if self._block.caption:
-                st.markdown(
-                    f"<div class='report-graph-caption'>"
-                    f"{html.escape(self._block.caption)}</div>",
-                    unsafe_allow_html=True,
-                )
-
             st.plotly_chart(fig, width="stretch", key=f"plotly-{self._uuid}")
 
     def _resolve_columns(
