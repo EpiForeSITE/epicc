@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import html
+<<<<<<< HEAD
 import math
+=======
+>>>>>>> origin/main
 from typing import Any
 
 import uuid
@@ -11,21 +14,36 @@ import plotly.colors as plotly_colors
 import plotly.graph_objects as go
 import streamlit as st
 
+from epicc.config import CONFIG
 from epicc.model.parameters import format_value
-from epicc.model.schema import Figure, FigureBlock, GraphBlock, MarkdownBlock, Scenario, TableBlock
+from epicc.model.schema import (
+    Figure,
+    FigureBlock,
+    GraphBlock,
+    MarkdownBlock,
+    Scenario,
+    TableBlock,
+)
 
 
 def _callout(summary: str, detail: str | None = None) -> None:
     """A muted informational callout used for skeletons and errors."""
 
-    detail_html = (
-        f"<br><span style='font-size:0.75rem;'>{detail}</span>" if detail else ""
-    )
+    safe_summary = html.escape(summary)
+    detail_html = ""
+    if detail:
+        detail_html = (
+            f"<br><span class='report-callout__detail'>{html.escape(detail)}</span>"
+        )
 
     st.markdown(
+<<<<<<< HEAD
         f"<div style='border:1px solid var(--secondary-background-color); border-radius:4px; "
         f"padding:0.75rem 1rem; color:var(--secondary-text-color); background:var(--secondary-background-color); "
         f"font-size:0.85rem;'>{summary}{detail_html}</div>",
+=======
+        f"<div class='report-callout'>{safe_summary}{detail_html}</div>",
+>>>>>>> origin/main
         unsafe_allow_html=True,
     )
 
@@ -34,8 +52,7 @@ class BlockRenderer(ABC):
     """Some sort of block in the report."""
 
     @abstractmethod
-    def render(self, run_results: dict[str, Any] | None) -> None:
-        ... 
+    def render(self, run_results: dict[str, Any] | None) -> None: ...
 
 
 class MarkdownBlockRenderer(BlockRenderer):
@@ -69,7 +86,7 @@ class TableBlockRenderer(BlockRenderer):
             return
 
         try:
-            st.dataframe(self._build_df(run_results), width='stretch')
+            st.dataframe(self._build_df(run_results), width="stretch")
         except Exception as exc:
             _callout("Table could not be rendered", str(exc))
 
@@ -91,9 +108,7 @@ class TableBlockRenderer(BlockRenderer):
         else:
             col_pairs = [(s.id, s) for s in scenarios]
 
-        col_labels = [
-            overrides.get(sid, s.label if s else sid) for sid, s in col_pairs
-        ]
+        col_labels = [overrides.get(sid, s.label if s else sid) for sid, s in col_pairs]
         col_results = [by_id.get(sid, {}) for sid, _ in col_pairs]
 
         data: dict[str, list] = {"label": []}
@@ -159,7 +174,8 @@ class GraphBlockRenderer(BlockRenderer):
         if run_results is None:
             kind_label = self._KIND_LABELS.get(self._block.kind, self._block.kind)
             _callout(
-                f"{kind_label}" + (f" - {self._block.title}" if self._block.title else ""),
+                f"{kind_label}"
+                + (f" - {self._block.title}" if self._block.title else ""),
                 "Run simulation to see results",
             )
             return
@@ -171,11 +187,30 @@ class GraphBlockRenderer(BlockRenderer):
             return
 
         # Chart!
+<<<<<<< HEAD
         with st.container(key=f'graph-block-{self._uuid}'):
             st.markdown("<div style='height: 0.35rem;'></div>", unsafe_allow_html=True)
             chart_width = "content" if self._block.kind in {"bar", "stacked_bar"} else "stretch"
             st.plotly_chart(fig, width=chart_width, key=f'plotly-{self._uuid}')
             st.markdown("<div style='height: 0.65rem;'></div>", unsafe_allow_html=True)
+=======
+        with st.container(key=f"graph-block-{self._uuid}"):
+            if self._block.title:
+                st.markdown(
+                    f"<div class='report-graph-title'>"
+                    f"{html.escape(self._block.title)}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if self._block.caption:
+                st.markdown(
+                    f"<div class='report-graph-caption'>"
+                    f"{html.escape(self._block.caption)}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.plotly_chart(fig, width="stretch", key=f"plotly-{self._uuid}")
+>>>>>>> origin/main
 
     def _resolve_columns(
         self, run_results: dict[str, Any]
@@ -206,17 +241,23 @@ class GraphBlockRenderer(BlockRenderer):
         _, col_labels, col_results = self._resolve_columns(run_results)
         rows = self._block.rows
         row_labels = [r.label for r in rows]
+        palette = CONFIG.brand.colors.chart_palette
 
         kind = self._block.kind
 
         if kind == "bar":
             # One trace per row-equation; scenarios on x-axis
             fig = go.Figure()
-            for row in rows:
-                values = [
-                    _raw_value(res.get(row.value, 0)) for res in col_results
-                ]
-                fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
+            for index, row in enumerate(rows):
+                values = [_raw_value(res.get(row.value, 0)) for res in col_results]
+                fig.add_trace(
+                    go.Bar(
+                        name=row.label,
+                        x=col_labels,
+                        y=values,
+                        marker_color=palette[index % len(palette)],
+                    )
+                )
             fig.update_layout(barmode="group", legend_title_text="Component")
             self._apply_yaxis_ticks(fig, [
                 _raw_value(res.get(row.value, 0))
@@ -226,11 +267,16 @@ class GraphBlockRenderer(BlockRenderer):
 
         elif kind == "stacked_bar":
             fig = go.Figure()
-            for row in rows:
-                values = [
-                    _raw_value(res.get(row.value, 0)) for res in col_results
-                ]
-                fig.add_trace(go.Bar(name=row.label, x=col_labels, y=values))
+            for index, row in enumerate(rows):
+                values = [_raw_value(res.get(row.value, 0)) for res in col_results]
+                fig.add_trace(
+                    go.Bar(
+                        name=row.label,
+                        x=col_labels,
+                        y=values,
+                        marker_color=palette[index % len(palette)],
+                    )
+                )
             fig.update_layout(barmode="stack", legend_title_text="Component")
             self._apply_yaxis_ticks(fig, [
                 _raw_value(res.get(row.value, 0))
@@ -240,13 +286,17 @@ class GraphBlockRenderer(BlockRenderer):
 
         elif kind == "line":
             fig = go.Figure()
-            for row in rows:
-                values = [
-                    _raw_value(res.get(row.value, 0)) for res in col_results
-                ]
-                fig.add_trace(go.Scatter(
-                    name=row.label, x=col_labels, y=values, mode="lines+markers"
-                ))
+            for index, row in enumerate(rows):
+                values = [_raw_value(res.get(row.value, 0)) for res in col_results]
+                fig.add_trace(
+                    go.Scatter(
+                        name=row.label,
+                        x=col_labels,
+                        y=values,
+                        mode="lines+markers",
+                        line={"color": palette[index % len(palette)]},
+                    )
+                )
             fig.update_layout(legend_title_text="Component")
             self._apply_yaxis_ticks(fig, [
                 _raw_value(res.get(row.value, 0))
@@ -257,16 +307,26 @@ class GraphBlockRenderer(BlockRenderer):
         elif kind == "pie":
             # Use the first scenario column; rows become pie slices
             first_results = col_results[0] if col_results else {}
-            values = [
-                _raw_value(first_results.get(row.value, 0)) for row in rows
-            ]
+            values = [_raw_value(first_results.get(row.value, 0)) for row in rows]
             scenario_label = col_labels[0] if col_labels else ""
+<<<<<<< HEAD
             fig = go.Figure(go.Pie(
                 labels=row_labels,
                 values=values,
                 hole=0.3,
             ))
             default_title = scenario_label
+=======
+            fig = go.Figure(
+                go.Pie(
+                    labels=row_labels,
+                    values=values,
+                    hole=0.3,
+                    marker={"colors": palette},
+                )
+            )
+            fig.update_layout(title_text=scenario_label)
+>>>>>>> origin/main
 
         else:
             raise ValueError(f"Unknown graph kind: {kind!r}")
@@ -354,7 +414,9 @@ class ReportRenderer:
         self._description = model_description
         self._block_renderers = block_renderers
 
-    def render(self, run_results: dict[str, Any] | None, *, hint: str | None = None) -> None:
+    def render(
+        self, run_results: dict[str, Any] | None, *, hint: str | None = None
+    ) -> None:
         st.title(self._title)
         st.write(self._description)
         st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
@@ -376,7 +438,7 @@ def get_report_renderer(model: Any) -> ReportRenderer:
     for block in model_def.report:
         if isinstance(block, MarkdownBlock):
             block_renderers.append(MarkdownBlockRenderer(block))
-            
+
         elif isinstance(block, TableBlock):
             block_renderers.append(
                 TableBlockRenderer(

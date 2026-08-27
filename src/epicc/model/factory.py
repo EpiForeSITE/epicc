@@ -9,7 +9,15 @@ from pydantic import BaseModel, Field, create_model
 from epicc.model.base import BaseSimulationModel
 from epicc.model.evaluator import EquationEvaluator
 from epicc.model.parameters import format_value
-from epicc.model.schema import FigureBlock, MarkdownBlock, Model, Parameter, Scenario, TableBlock
+from epicc.model.schema import (
+    FigureBlock,
+    MarkdownBlock,
+    Model,
+    Parameter,
+    Preset,
+    Scenario,
+    TableBlock,
+)
 
 
 def _make_parameter_model(model_def: Model) -> type[BaseModel]:
@@ -37,8 +45,15 @@ def _make_parameter_model(model_def: Model) -> type[BaseModel]:
                 kwargs["le"] = int(param.max)
 
             constraint_hint = _range_hint(param.min, param.max, param.unit)
-            description = f"{base_description}\n\n{constraint_hint}" if constraint_hint else base_description
-            fields[param_id] = (int, Field(int(default), description=description, **kwargs))
+            description = (
+                f"{base_description}\n\n{constraint_hint}"
+                if constraint_hint
+                else base_description
+            )
+            fields[param_id] = (
+                int,
+                Field(int(default), description=description, **kwargs),
+            )
 
         elif param.type == "number":
             kwargs = {}
@@ -49,11 +64,21 @@ def _make_parameter_model(model_def: Model) -> type[BaseModel]:
                 kwargs["le"] = float(param.max)
 
             constraint_hint = _range_hint(param.min, param.max, param.unit)
-            description = f"{base_description}\n\n{constraint_hint}" if constraint_hint else base_description
-            fields[param_id] = (float, Field(float(default), description=description, **kwargs))
+            description = (
+                f"{base_description}\n\n{constraint_hint}"
+                if constraint_hint
+                else base_description
+            )
+            fields[param_id] = (
+                float,
+                Field(float(default), description=description, **kwargs),
+            )
 
         elif param.type == "boolean":
-            fields[param_id] = (bool, Field(bool(default), description=base_description))
+            fields[param_id] = (
+                bool,
+                Field(bool(default), description=base_description),
+            )
 
         elif param.type == "enum" and param.options:
             keys = tuple(param.options.keys())
@@ -62,7 +87,10 @@ def _make_parameter_model(model_def: Model) -> type[BaseModel]:
                 f"{k} ({v})" for k, v in param.options.items()
             )
             description = f"{base_description}\n\n{options_hint}"
-            fields[param_id] = (literal_type, Field(str(default), description=description))
+            fields[param_id] = (
+                literal_type,
+                Field(str(default), description=description),
+            )
 
         else:
             fields[param_id] = (str, Field(str(default), description=base_description))
@@ -138,7 +166,9 @@ def create_model_class(
         return model_def.description
 
     def scenario_labels(self) -> dict[str, str]:
-        return {scenario.id: scenario.label for scenario in model_def.resolved_scenarios()}
+        return {
+            scenario.id: scenario.label for scenario in model_def.resolved_scenarios()
+        }
 
     def default_params(self) -> dict[str, Any]:
         return {
@@ -220,9 +250,9 @@ def create_model_class(
             # Determine column labels and corresponding results based on column_ids or all scenarios.
             if column_ids is not None:
                 col_labels = [
-                    label_overrides.get(sid, next(
-                        (s.label for s in scenarios if s.id == sid), sid
-                    ))
+                    label_overrides.get(
+                        sid, next((s.label for s in scenarios if s.id == sid), sid)
+                    )
                     for sid in column_ids
                     if sid in scenario_results_by_id
                 ]
@@ -296,26 +326,24 @@ def create_model_class(
     def parameter_specs(self) -> dict[str, Any]:
         """Return the Parameter schema objects keyed by param_id (equation-context only)."""
         return {
-            k: v
-            for k, v in model_def.parameters.items()
-            if v.context != "scenario"
+            k: v for k, v in model_def.parameters.items() if v.context != "scenario"
         }
 
     def scenario_parameter_specs(self) -> dict[str, Parameter]:
         """Return the Parameter schema objects for scenario-context params."""
         return {
-            k: v
-            for k, v in model_def.parameters.items()
-            if v.context == "scenario"
+            k: v for k, v in model_def.parameters.items() if v.context == "scenario"
         }
 
     def default_scenarios(self) -> list[Scenario]:
         """Return the model's default scenario list."""
         return list(model_def.resolved_scenarios())
 
-    def parameter_groups(self) -> list | None:
-        """Return the parameter group tree, or None if not defined."""
+    def parameter_groups(self) -> list:
         return model_def.groups
+
+    def presets(self) -> list[Preset] | None:
+        return list(model_def.presets) if model_def.presets else None
 
     methods = {
         "human_name": human_name,
@@ -332,6 +360,7 @@ def create_model_class(
         "scenario_parameter_specs": property(scenario_parameter_specs),
         "default_scenarios": property(default_scenarios),
         "parameter_groups": property(parameter_groups),
+        "presets": property(presets),
         # Class metadata
         "__module__": "epicc.model.factory",
         "__doc__": f"Dynamically generated model class for '{model_def.title}'",
@@ -351,7 +380,7 @@ def create_model_instance(
     model_def: Model,
     source_path: str | None = None,
 ) -> BaseSimulationModel:
-    # Create the model class and then instantiate it. 
+    # Create the model class and then instantiate it.
     model_class = create_model_class(model_def, source_path)
     return model_class()
 

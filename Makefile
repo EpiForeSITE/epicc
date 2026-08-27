@@ -2,6 +2,7 @@ UV ?= uv
 
 STLITE_VER ?= 0.86.0
 PORT ?= 8000
+BUMP ?= patch
 
 APP_PY := app.py
 SOURCE := src/epicc
@@ -51,6 +52,10 @@ test: ## Run pytest
 
 .PHONY: check
 check: lint typecheck test ## Run all quality checks
+
+.PHONY: bump
+bump: ## Cut a release (make bump BUMP=minor, or make bump VERSION=1.2.3)
+	$(UV) run scripts/bump_version.py $(if $(VERSION),$(VERSION),$(BUMP))
 
 .PHONY: clean
 clean: ## Remove build artifacts

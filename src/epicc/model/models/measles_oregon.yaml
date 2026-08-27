@@ -1,0 +1,322 @@
+title: "Measles Outbreak Costs in Oregon"
+description: "What a measles outbreak costs Oregon, using three real Oregon outbreak sizes and Oregon-specific vaccination coverage and wages."
+authors:
+  - name: George G. Vega Yon
+
+parameters:
+  n_cases:
+    context: "scenario"
+    type: integer
+    label: "Confirmed cases"
+    description: "Number of confirmed measles cases in the outbreak."
+    default: 31
+    min: 1
+    max: 5000
+    unit: "cases"
+
+  mmr_coverage:
+    type: number
+    label: "MMR coverage among exposed contacts"
+    description: "Share of exposed contacts already immune. Only the remaining susceptible contacts are quarantined, so this is the single biggest lever in the model."
+    default: 0.90
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "Oregon Health Authority (May 2026): 90.2% of Oregon K-12 students are up to date on required vaccines; only 85.6% of kindergartners are, and 36% of Oregon schools fall below the 93% MMR threshold."
+
+  contacts_per_case:
+    type: number
+    label: "Exposed contacts per case"
+    description: "Average number of exposed people public health must identify and follow up per confirmed case."
+    default: 58
+    min: 0
+    max: 500
+    unit: "contacts"
+    references:
+      - "Pike et al. (2021), Pediatrics 147(4): the Clark County, WA outbreak traced roughly 4,200 contacts across 72 cases."
+
+  fixed_response_cost:
+    type: number
+    label: "Fixed cost of standing up a response"
+    description: "One-time cost of activating an outbreak response (incident command, communications, clinic and lab surge) regardless of how many cases follow."
+    default: 297747
+    min: 0
+    max: 2000000
+    unit: "USD"
+    references:
+      - "Johns Hopkins IVAC / Vaccine (2025). Review of 27 U.S. measles outbreak cost studies, 2000-2025."
+
+  staff_hours_per_case:
+    type: number
+    label: "Public health staff hours per case"
+    description: "Investigation, contact tracing, and quarantine monitoring hours per confirmed case."
+    default: 176
+    min: 0
+    max: 1000
+    unit: "hours"
+    references:
+      - "Clark County Public Health: 12,684 staff hours across 72 cases in the 2018-2019 outbreak (local staff only; state, CDC, and volunteer hours are additional)."
+
+  hourly_wage_ph_staff:
+    type: number
+    label: "Hourly wage, public health responder"
+    description: "Loaded hourly wage for the epidemiologists and communicable disease nurses running the response."
+    default: 47.06
+    min: 0
+    max: 200
+    unit: "USD/hour"
+    references:
+      - "U.S. Bureau of Labor Statistics, OEWS May 2025: epidemiologists (19-1041), mean hourly wage $47.06."
+
+  quarantine_days:
+    type: integer
+    label: "Quarantine length"
+    description: "Days a susceptible contact must stay home after exposure."
+    default: 21
+    min: 0
+    max: 30
+    unit: "days"
+    references:
+      - "CDC guidance: 21 days from last exposure."
+
+  workday_fraction:
+    type: number
+    label: "Fraction of quarantine days that are workdays"
+    description: "Five workdays in seven."
+    default: 0.714
+    min: 0
+    max: 1
+    unit: "proportion"
+
+  share_costing_a_workday:
+    type: number
+    label: "Share of quarantined contacts costing a workday"
+    description: "Fraction of quarantined contacts whose quarantine costs someone a day of paid work, either their own or a caregiver's. Most quarantined contacts in Oregon outbreaks are school-age children, so this captures parents who must stay home."
+    default: 0.60
+    min: 0
+    max: 1
+    unit: "proportion"
+
+  hourly_wage_worker:
+    type: number
+    label: "Hourly wage, Oregon worker"
+    description: "Average Oregon hourly wage used to value a lost workday (8 hours)."
+    default: 34.60
+    min: 0
+    max: 200
+    unit: "USD/hour"
+    references:
+      - "Oregon Employment Department / QualityInfo (2025): statewide all-occupations average of $71,964 per year, or $34.60 per hour."
+
+  proportion_hospitalized:
+    type: number
+    label: "Share of cases hospitalized"
+    description: "Fraction of confirmed cases admitted to hospital."
+    default: 0.07
+    min: 0
+    max: 1
+    unit: "proportion"
+    references:
+      - "CDC measles surveillance, 2026 year to date: 7% of 2,465 confirmed U.S. cases hospitalized (11% in 2025)."
+
+  cost_hospitalization:
+    type: number
+    label: "Cost per hospitalization"
+    description: "Average direct medical cost of one hospitalized measles case."
+    default: 34000
+    min: 0
+    max: 500000
+    unit: "USD"
+    references:
+      - "New Mexico 2025 outbreak: $238,000 in charges across 7 hospitalizations."
+
+  cost_outpatient_per_case:
+    type: number
+    label: "Outpatient and lab cost per case"
+    description: "Clinic visits and confirmatory laboratory testing per confirmed case."
+    default: 520
+    min: 0
+    max: 10000
+    unit: "USD"
+    references:
+      - "New Mexico 2025 outbreak: $32,000 in outpatient visits and $20,000 in laboratory tests across 100 cases."
+
+groups:
+  - label: "Outbreak spread"
+    children:
+      - mmr_coverage
+      - contacts_per_case
+  - label: "Public health response"
+    children:
+      - fixed_response_cost
+      - staff_hours_per_case
+      - hourly_wage_ph_staff
+  - label: "Quarantine and lost work"
+    children:
+      - quarantine_days
+      - workday_fraction
+      - share_costing_a_workday
+      - hourly_wage_worker
+  - label: "Medical care"
+    children:
+      - proportion_hospitalized
+      - cost_hospitalization
+      - cost_outpatient_per_case
+
+equations:
+  eq_contacts:
+    label: "Contacts traced"
+    unit: "people"
+    output: "number"
+    compute: |
+      round(n_cases * contacts_per_case)
+
+  eq_quarantined:
+    label: "Susceptible contacts quarantined"
+    unit: "people"
+    output: "number"
+    compute: |
+      round(eq_contacts * (1 - mmr_coverage))
+
+  eq_response:
+    label: "Public health response"
+    unit: "USD"
+    output: "number"
+    compute: |
+      fixed_response_cost + n_cases * staff_hours_per_case * hourly_wage_ph_staff
+
+  eq_quarantine_loss:
+    label: "Lost work during quarantine"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_quarantined * quarantine_days * workday_fraction * share_costing_a_workday * hourly_wage_worker * 8
+
+  eq_medical:
+    label: "Medical care"
+    unit: "USD"
+    output: "number"
+    compute: |
+      n_cases * (proportion_hospitalized * cost_hospitalization + cost_outpatient_per_case)
+
+  eq_total:
+    label: "Total cost"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_response + eq_quarantine_loss + eq_medical
+
+  eq_cost_per_case:
+    label: "Cost per case"
+    unit: "USD"
+    output: "number"
+    compute: |
+      eq_total / n_cases
+
+scenarios:
+  - id: "cluster_5"
+    label: "5 cases (early cluster)"
+    vars:
+      n_cases: 5
+  - id: "outbreak_31"
+    label: "31 cases (Oregon 2024)"
+    vars:
+      n_cases: 31
+  - id: "outbreak_45"
+    label: "45 cases (Oregon 2026 YTD)"
+    vars:
+      n_cases: 45
+
+presets:
+  - id: kindergarten
+    label: "Oregon kindergarten coverage (85.6%)"
+    params:
+      mmr_coverage: 0.856
+      contacts_per_case: 89
+  - id: herd_immunity
+    label: "At the 93% MMR threshold"
+    params:
+      mmr_coverage: 0.93
+  - id: undervaccinated_school
+    label: "Under-vaccinated school cluster (75%)"
+    params:
+      mmr_coverage: 0.75
+      contacts_per_case: 100
+
+figures: []
+
+report:
+  - type: markdown
+    content: |
+      ## What this estimates
+
+      What one measles outbreak costs Oregon, across three sizes Oregon has actually seen:
+      an early **5-case** cluster, the **31 cases** of 2024, and the **45 cases** confirmed
+      so far in 2026.
+
+      Cost is split three ways:
+
+      1. **Public health response** - a fixed cost to stand up the response, plus staff time per case.
+      2. **Lost work during quarantine** - susceptible contacts sent home for 21 days.
+      3. **Medical care** - hospitalizations, clinic visits, and lab tests.
+
+      The lever that matters is **MMR coverage among exposed contacts**. Every immune contact
+      is one fewer person in quarantine, so coverage scales the largest cost component directly.
+
+  - type: table
+    caption: "Estimated cost of a measles outbreak in Oregon"
+    rows:
+      - label: "Contacts traced"
+        value: "eq_contacts"
+      - label: "Susceptible contacts quarantined"
+        value: "eq_quarantined"
+      - label: "Public health response"
+        value: "eq_response"
+      - label: "Lost work during quarantine"
+        value: "eq_quarantine_loss"
+      - label: "Medical care"
+        value: "eq_medical"
+      - label: "TOTAL"
+        value: "eq_total"
+        emphasis: "strong"
+      - label: "Cost per case"
+        value: "eq_cost_per_case"
+
+  - type: graph
+    kind: stacked_bar
+    title: "Where the money goes"
+    caption: "Response labor and quarantined workers dominate; medical care is the smallest share."
+    rows:
+      - label: "Public health response"
+        value: "eq_response"
+      - label: "Lost work during quarantine"
+        value: "eq_quarantine_loss"
+      - label: "Medical care"
+        value: "eq_medical"
+
+  - type: graph
+    kind: bar
+    title: "Cost per case falls as an outbreak grows"
+    caption: "Standing up a response costs roughly $300,000 before the second case is even confirmed, so small outbreaks are expensive per case. Containing an outbreak early is still far cheaper in total."
+    rows:
+      - label: "Cost per case"
+        value: "eq_cost_per_case"
+
+  - type: markdown
+    content: |
+      ## Assumptions
+
+      - All costs in 2025-2026 USD, from a societal perspective.
+      - Contacts are traced and quarantined at the same rate for every case.
+      - A lost workday is valued at 8 hours of the Oregon average wage.
+      - Long-term costs (SSPE, deaths, lost school days) are not counted, so these are conservative.
+
+      ## Sources
+
+      - Oregon Health Authority, student immunization rates, May 2026.
+      - Oregon Health Authority measles case counts (31 in 2024; 45 as of Aug 13, 2026).
+      - Pike et al. (2021), *Societal Costs of a Measles Outbreak*, Pediatrics 147(4).
+      - Johns Hopkins IVAC, *Vaccine* (2025), review of U.S. measles outbreak costs, 2000-2025.
+      - CDC measles surveillance, 2026 year to date.
+      - U.S. Bureau of Labor Statistics OEWS, May 2025; Oregon Employment Department, 2025.

@@ -316,6 +316,29 @@ scenarios:
       isolation_days: 5
       latent_multiplier: 1.5
 
+presets:
+  - id: congregate_setting
+    label: "Congregate setting (prison/shelter)"
+    params:
+      contacts_per_case: 300
+      prob_latent_if_14_day: 0.05
+      hourly_wage_worker: 18.00
+  - id: community_setting
+    label: "Community setting"
+    params:
+      contacts_per_case: 75
+      prob_latent_if_14_day: 0.015
+  - id: low_resource
+    label: "Low-resource setting"
+    params:
+      contacts_per_case: 200
+      prob_latent_if_14_day: 0.04
+      direct_medical_cost_day: 120
+      cost_latent: 80
+      cost_active: 4200
+      hourly_wage_worker: 4.50
+      hourly_wage_nurse: 8.00
+
 figures: []
 
 report:
@@ -328,7 +351,7 @@ report:
       infections.
 
       $$
-      \LaTeX \text{ test.}
+      \text{LaTeX test.}
       $$
 
       ## Scenarios
@@ -344,9 +367,9 @@ report:
       3. **Productivity Loss**: Lost wages during isolation period (index case only)
       4. **Secondary Infection Costs**: Long-term costs of treating latent and active TB in
           contacts, with appropriate discounting over remaining years of life
-      
+
       ### Transmission Risk Impact
-      
+
       Reducing isolation duration increases the infectious period, leading to more secondary cases:
 
   - type: graph
@@ -374,9 +397,9 @@ report:
   - type: markdown
     content: |
       ## Economic Impact Summary
-      
+
       The trade-off between isolation duration and transmission risk creates complex economic dynamics:
-      
+
       - **Short-term savings**: Reduced isolation costs and productivity losses
       - **Long-term costs**: Higher burden from secondary infections
       - **Net effect**: Often favors longer isolation from a societal cost perspective
@@ -415,4 +438,3 @@ report:
       - label: "Total cost"
         value: "eq_total"
         emphasis: "strong"
-

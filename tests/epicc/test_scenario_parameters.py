@@ -73,6 +73,7 @@ def model_with_scenario_params():
                 rows=[TableRow(label="Total", value="eq_total")],
             ),
         ],
+        groups=["unit_cost"],
     )
 
 
@@ -123,6 +124,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x=0)),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
     def test_scenario_var_above_max_rejected(self):
@@ -141,6 +143,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x=11.0)),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
     def test_equation_context_params_not_validated_in_scenario_vars(self):
@@ -157,6 +160,7 @@ class TestScenarioVarValidation:
                 Scenario(id="s1", label="S1", vars=ScenarioVars(x=999.0)),
             ],
             report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+            groups=["x"],
         )
         assert m.scenarios[0].vars.model_dump()["x"] == 999.0
 
@@ -176,6 +180,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x=True)),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
     def test_scenario_var_boolean_rejected_for_number(self):
@@ -194,6 +199,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x=False)),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
     def test_scenario_var_string_coerced_for_integer(self):
@@ -212,6 +218,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x="0")),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
     def test_scenario_var_non_numeric_string_rejected_for_integer(self):
@@ -230,6 +237,7 @@ class TestScenarioVarValidation:
                     Scenario(id="s1", label="S1", vars=ScenarioVars(x="abc")),
                 ],
                 report=[TableBlock(type="table", rows=[TableRow(label="E", value="eq")])],
+                groups=["x"],
             )
 
 

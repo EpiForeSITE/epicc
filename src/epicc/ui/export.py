@@ -76,6 +76,8 @@ def render_parameter_export_modal(
     model_name: str,
     param_data: dict[str, Any],
     *,
+    label: str = "Save Parameters",
+    disabled: bool = False,
     pydantic_model: type[BaseModel] | None = None,
     container: Any = None,
 ) -> None:
@@ -87,6 +89,7 @@ def render_parameter_export_modal(
         if cls not in seen:
             seen.add(cls)
             unique.append((suffix.lstrip("."), cls))
+<<<<<<< HEAD
 
     model_key = model_name.lower().replace(" ", "_")
     if rc.button(
@@ -94,10 +97,29 @@ def render_parameter_export_modal(
         use_container_width=True,
         key=f"save_params_btn_{model_key}",
     ):
+=======
+    
+    if rc.button(label, width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}", disabled=disabled):
+>>>>>>> origin/main
         _export_dialog(model_name, param_data, unique, pydantic_model)
 
 
+def cancel_print_request() -> None:
+    """Drop a pending print request that can no longer be served."""
+
+    st.session_state[_PRINT_REQUESTED_KEY] = False
+
+
+def _request_print() -> None:
+    if not has_results():
+        return
+
+    st.session_state[_PRINT_REQUESTED_KEY] = True
+    st.session_state[_PRINT_TOKEN_KEY] = st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
+
+
 def render_pdf_export_button(container: Any = None) -> None:
+<<<<<<< HEAD
     rc = container if container is not None else st
     if not has_results():
         rc.button("Save report as PDF", disabled=True, use_container_width=True)
@@ -113,6 +135,23 @@ def render_pdf_export_button(container: Any = None) -> None:
         st.session_state[_PRINT_TOKEN_KEY] = (
             st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
         )
+=======
+    # Render a direct Save report as PDF button.
+    #
+    # The request is recorded in an on_click callback rather than from the
+    # button's return value. Callbacks run before the rerun, so the flag is
+    # already set wherever trigger_print_if_requested() sits in the page; read
+    # from the return value it was only seen by the rerun *after* the one the
+    # click caused, which is why the button used to need two clicks.
+    rc = container if container is not None else st
+    rc.button(
+        "Save report as PDF",
+        disabled=not has_results(),
+        width='stretch',
+        type='primary',
+        on_click=_request_print,
+    )
+>>>>>>> origin/main
 
 
 def trigger_print_if_requested() -> None:
@@ -134,7 +173,7 @@ def trigger_print_if_requested() -> None:
     # instead of throwing an error, leaving me to waste hours debugging why my print button doesn't
     # work at all. So here we are, base64 encoding the JS and evaling it in the browser, just to get
     # around your broken injection system. I hope you're proud of yourselves.
-    # 
+    #
     # Seriously!?!? This works?
     #
     # This is an alternative implementation to something like:
@@ -143,9 +182,21 @@ def trigger_print_if_requested() -> None:
     #
     # Which would have a mess build-wise. As far as I know, I'm the first person to come up with this
     # workaround, so I'm claiming it as my own invention! Don't tell Streamlit.
+<<<<<<< HEAD
 
     raw_js = "(function(){ window.print(); })();"
     js64 = base64.b64encode(raw_js.encode("utf-8")).decode("utf-8")
+=======
+    #
+    # By using st.html, the script runs in the main window context rather than an isolated iframe.
+    with importlib.resources.files("epicc").joinpath("js/print_results.js").open("rb") as f:
+        js = f.read().decode()
+        js64 = base64.b64encode(js.encode()).decode()
+
+    print_assign = f"window.__epiccPrintToken = {trigger_token}"
+    looks_malicious = f"eval(atob('{js64}'))"
+
+>>>>>>> origin/main
     st.html(
         f"<script>eval(atob('{js64}'))</script>",
         unsafe_allow_javascript=True,
