@@ -9,10 +9,10 @@ import sys
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
-import plotly.colors as plotly_colors
 import plotly.graph_objects as go
 import plotly.io as pio
 
+from epicc.config import CONFIG
 from epicc.model.base import BaseSimulationModel
 from epicc.model.parameters import format_value
 
@@ -490,6 +490,7 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
         return None
 
     fig = go.Figure()
+    palette = _docx_chart_palette()
 
     if kind in {"bar", "stacked_bar", "line"}:
         for row in rows:
@@ -507,7 +508,7 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
                         name=label,
                         x=scenario_names,
                         y=values,
-                        marker={"color": list(plotly_colors.qualitative.Plotly)[len(fig.data) % len(plotly_colors.qualitative.Plotly)]},
+                        marker={"color": palette[len(fig.data) % len(palette)]},
                     )
                 )
             else:
@@ -517,8 +518,8 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
                         x=scenario_names,
                         y=values,
                         mode="lines+markers",
-                        line={"color": list(plotly_colors.qualitative.Plotly)[len(fig.data) % len(plotly_colors.qualitative.Plotly)]},
-                        marker={"color": list(plotly_colors.qualitative.Plotly)[len(fig.data) % len(plotly_colors.qualitative.Plotly)]},
+                        line={"color": palette[len(fig.data) % len(palette)]},
+                        marker={"color": palette[len(fig.data) % len(palette)]},
                     )
                 )
 
@@ -562,7 +563,7 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
                 labels=labels,
                 values=values,
                 hole=0.3,
-                marker={"colors": [list(plotly_colors.qualitative.Plotly)[i % len(plotly_colors.qualitative.Plotly)] for i in range(len(labels))]},
+                marker={"colors": [palette[i % len(palette)] for i in range(len(labels))]},
             )
         )
         default_title = first_scenario
@@ -581,7 +582,6 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
     if section_subtitle:
         title_html = f"{title_html}<br><sup>{html.escape(section_subtitle)}</sup>"
 
-    palette = list(plotly_colors.qualitative.Plotly)
     chart_top_margin = 132 if kind in {"bar", "stacked_bar", "line"} else 92
     fig.update_layout(
         title={"text": title_html, "x": 0.5, "xanchor": "center", "y": 0.90, "yanchor": "top"},
@@ -597,6 +597,13 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
         hovermode="x unified",
     )
     return fig
+
+
+def _docx_chart_palette() -> list[str]:
+    palette = list(CONFIG.brand.colors.chart_palette)
+    if palette:
+        return palette
+    return ["#A60F2D", "#FDB921", "#4E4E4E", "#6B6E72"]
 
 
 def _apply_yaxis_ticks(fig: go.Figure, values: list[float]) -> None:

@@ -7,7 +7,6 @@ from typing import Any
 
 import uuid
 import pandas as pd
-import plotly.colors as plotly_colors
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -327,7 +326,7 @@ class GraphBlockRenderer(BlockRenderer):
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             template=theme_template,
-            colorway=list(plotly_colors.qualitative.Plotly),
+            colorway=palette,
             font={"family": "Arial", "size": 12},
         )
         return fig

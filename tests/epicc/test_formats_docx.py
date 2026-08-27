@@ -1,5 +1,6 @@
 from zipfile import ZipFile
 
+from epicc.config import CONFIG
 from epicc.ui.report_exports import (
     _build_plotly_figure_from_rows,
     build_report_docx_bytes,
@@ -124,7 +125,7 @@ def test_export_figure_uses_matching_color_palette():
         }
     )
     assert fig is not None
-    assert fig.data[0].marker.color == "#636EFA"
+    assert fig.data[0].marker.color == CONFIG.brand.colors.chart_palette[0]
 
 
 def test_export_image_xml_does_not_emit_visible_label_text():
