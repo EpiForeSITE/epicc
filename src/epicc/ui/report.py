@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import html
-<<<<<<< HEAD
 import math
-=======
->>>>>>> origin/main
 from typing import Any
 
 import uuid
@@ -37,13 +34,7 @@ def _callout(summary: str, detail: str | None = None) -> None:
         )
 
     st.markdown(
-<<<<<<< HEAD
-        f"<div style='border:1px solid var(--secondary-background-color); border-radius:4px; "
-        f"padding:0.75rem 1rem; color:var(--secondary-text-color); background:var(--secondary-background-color); "
-        f"font-size:0.85rem;'>{summary}{detail_html}</div>",
-=======
         f"<div class='report-callout'>{safe_summary}{detail_html}</div>",
->>>>>>> origin/main
         unsafe_allow_html=True,
     )
 
@@ -187,13 +178,6 @@ class GraphBlockRenderer(BlockRenderer):
             return
 
         # Chart!
-<<<<<<< HEAD
-        with st.container(key=f'graph-block-{self._uuid}'):
-            st.markdown("<div style='height: 0.35rem;'></div>", unsafe_allow_html=True)
-            chart_width = "content" if self._block.kind in {"bar", "stacked_bar"} else "stretch"
-            st.plotly_chart(fig, width=chart_width, key=f'plotly-{self._uuid}')
-            st.markdown("<div style='height: 0.65rem;'></div>", unsafe_allow_html=True)
-=======
         with st.container(key=f"graph-block-{self._uuid}"):
             if self._block.title:
                 st.markdown(
@@ -210,7 +194,6 @@ class GraphBlockRenderer(BlockRenderer):
                 )
 
             st.plotly_chart(fig, width="stretch", key=f"plotly-{self._uuid}")
->>>>>>> origin/main
 
     def _resolve_columns(
         self, run_results: dict[str, Any]
@@ -309,14 +292,6 @@ class GraphBlockRenderer(BlockRenderer):
             first_results = col_results[0] if col_results else {}
             values = [_raw_value(first_results.get(row.value, 0)) for row in rows]
             scenario_label = col_labels[0] if col_labels else ""
-<<<<<<< HEAD
-            fig = go.Figure(go.Pie(
-                labels=row_labels,
-                values=values,
-                hole=0.3,
-            ))
-            default_title = scenario_label
-=======
             fig = go.Figure(
                 go.Pie(
                     labels=row_labels,
@@ -325,8 +300,7 @@ class GraphBlockRenderer(BlockRenderer):
                     marker={"colors": palette},
                 )
             )
-            fig.update_layout(title_text=scenario_label)
->>>>>>> origin/main
+            default_title = scenario_label
 
         else:
             raise ValueError(f"Unknown graph kind: {kind!r}")

@@ -308,64 +308,6 @@ with param_col:
         # widgets below have rendered. Reserve the slot now, fill it last.
         run_slot = st.container(key="run-action-row")
 
-<<<<<<< HEAD
-    typed_params = None
-    if not has_input_errors:
-        try:
-            typed_params = build_typed_params(active_model, model_defaults_flat, params)
-        except ValidationError as exc:
-            render_validation_error(selected_label, exc, container=param_col)
-            has_input_errors = True
-
-    # Force both controls into the same keyed row for CSS alignment
-    with st.container(key="param-actions-row"):
-        button_col1, button_col2 = st.columns(2, gap="small", vertical_alignment="top")
-    
-    # Reset Parameters button
-    def _handle_reset() -> None:
-        model_label = cast(str, selected_label)  # Safe because we checked above
-        reset_parameters_to_defaults(
-            model_defaults_flat, params, model_label, param_specs=active_model.parameter_specs
-        )
-        # Reset scenarios back to model defaults
-        default_scenarios = active_model.default_scenarios
-        if default_scenarios:
-            reset_scenario_state(
-                model_label,
-                default_scenarios,
-                active_model.scenario_parameter_specs or {},
-            )
-
-    button_col1.button(
-        "Reset Parameters",
-        on_click=_handle_reset,
-        use_container_width=True,
-    )
-
-    # Save Parameters button (only enabled when parameters are valid)
-    if typed_params is not None:
-        render_parameter_export_modal(
-            active_model.human_name(),
-            typed_params.model_dump(),
-            pydantic_model=type(typed_params),
-            container=button_col2,
-        )
-    else:
-        button_col2.button(
-            "Save Parameters",
-            disabled=True,
-            use_container_width=True,
-            help="Fix parameter errors first",
-        )
-
-    st.divider()
-    run_clicked = st.button(
-        "Run Simulation",
-        disabled=has_input_errors,
-        use_container_width=True,
-        type="primary",
-    )
-=======
         params, scenario_overrides, model_defaults_flat, has_input_errors, is_dirty = (
             render_sidebar_parameters(
                 active_model,
@@ -444,7 +386,6 @@ with param_col:
         run_clicked = run_slot.button(
             "Run Simulation", disabled=has_input_errors, width="stretch", type="primary"
         )
->>>>>>> origin/main
 
 with result_col:
     if typed_params is None:
@@ -478,8 +419,6 @@ with result_col:
         run_output if run_output is not None else (get_run_output() if has_results() else None),
         container=result_col,
     )
-
-trigger_print_if_requested()
 
     # Last: the print script measures the charts, so it has to reach the browser
     # after the report they belong to has been rendered.

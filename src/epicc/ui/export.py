@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import base64
+import importlib.resources
 
 import streamlit as st
 from pydantic import BaseModel
@@ -89,18 +90,8 @@ def render_parameter_export_modal(
         if cls not in seen:
             seen.add(cls)
             unique.append((suffix.lstrip("."), cls))
-<<<<<<< HEAD
 
-    model_key = model_name.lower().replace(" ", "_")
-    if rc.button(
-        "Save Parameters",
-        use_container_width=True,
-        key=f"save_params_btn_{model_key}",
-    ):
-=======
-    
     if rc.button(label, width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}", disabled=disabled):
->>>>>>> origin/main
         _export_dialog(model_name, param_data, unique, pydantic_model)
 
 
@@ -119,23 +110,6 @@ def _request_print() -> None:
 
 
 def render_pdf_export_button(container: Any = None) -> None:
-<<<<<<< HEAD
-    rc = container if container is not None else st
-    if not has_results():
-        rc.button("Save report as PDF", disabled=True, use_container_width=True)
-        return
-
-    clicked = rc.button(
-        "Save report as PDF",
-        use_container_width=True,
-        type="primary",
-    )
-    if clicked:
-        st.session_state[_PRINT_REQUESTED_KEY] = True
-        st.session_state[_PRINT_TOKEN_KEY] = (
-            st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
-        )
-=======
     # Render a direct Save report as PDF button.
     #
     # The request is recorded in an on_click callback rather than from the
@@ -151,7 +125,6 @@ def render_pdf_export_button(container: Any = None) -> None:
         type='primary',
         on_click=_request_print,
     )
->>>>>>> origin/main
 
 
 def trigger_print_if_requested() -> None:
@@ -182,11 +155,6 @@ def trigger_print_if_requested() -> None:
     #
     # Which would have a mess build-wise. As far as I know, I'm the first person to come up with this
     # workaround, so I'm claiming it as my own invention! Don't tell Streamlit.
-<<<<<<< HEAD
-
-    raw_js = "(function(){ window.print(); })();"
-    js64 = base64.b64encode(raw_js.encode("utf-8")).decode("utf-8")
-=======
     #
     # By using st.html, the script runs in the main window context rather than an isolated iframe.
     with importlib.resources.files("epicc").joinpath("js/print_results.js").open("rb") as f:
@@ -196,7 +164,6 @@ def trigger_print_if_requested() -> None:
     print_assign = f"window.__epiccPrintToken = {trigger_token}"
     looks_malicious = f"eval(atob('{js64}'))"
 
->>>>>>> origin/main
     st.html(
         f"<script>eval(atob('{js64}'))</script>",
         unsafe_allow_javascript=True,
