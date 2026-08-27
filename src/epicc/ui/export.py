@@ -161,11 +161,8 @@ def trigger_print_if_requested() -> None:
         js = f.read().decode()
         js64 = base64.b64encode(js.encode()).decode()
 
-    print_assign = f"window.__epiccPrintToken = {trigger_token}"
-    looks_malicious = f"eval(atob('{js64}'))"
-
     st.html(
-        f"<script>eval(atob('{js64}'))</script>",
+        f"<script>window.__epiccPrintToken = {trigger_token}; eval(atob('{js64}'))</script>",
         unsafe_allow_javascript=True,
     )
 

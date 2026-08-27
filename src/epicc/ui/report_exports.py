@@ -220,7 +220,6 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
 
             elif sec_type in {"table", "graph"}:
                 sec_title = str(section.get("title", "")).strip()
-                caption = str(section.get("caption", "")).strip()
 
                 if sec_type == "table" and sec_title:
                     body_parts.append(_w_paragraph(sec_title, bold=True))
@@ -420,13 +419,13 @@ def _w_image(
         "<wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\">"
         f"<wp:extent cx=\"{width_emu}\" cy=\"{height_emu}\"/>"
         "<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/>"
-        "<wp:docPr id=\"1\" name=\"\" descr=\"\"/>"
+        f"<wp:docPr id=\"1\" name=\"{safe_name}\" descr=\"\"/>"
         "<wp:cNvGraphicFramePr/>"
         "<a:graphic>"
         "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">"
         "<pic:pic>"
         "<pic:nvPicPr>"
-        "<pic:cNvPr id=\"0\" name=\"\"/>"
+        f"<pic:cNvPr id=\"0\" name=\"{safe_name}\"/>"
         "<pic:cNvPicPr/>"
         "</pic:nvPicPr>"
         "<pic:blipFill>"
