@@ -338,15 +338,15 @@ class GraphBlockRenderer(BlockRenderer):
         normalized = raw_step / magnitude
 
         if normalized <= 1:
-            nice = 1
+            nice = 1.0
         elif normalized <= 2:
-            nice = 2
+            nice = 2.0
         elif normalized <= 2.5:
             nice = 2.5
         elif normalized <= 5:
-            nice = 5
+            nice = 5.0
         else:
-            nice = 10
+            nice = 10.0
 
         return nice * magnitude
 

@@ -546,7 +546,7 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
     elif kind == "pie":
         first_scenario = scenario_names[0]
         labels: list[str] = []
-        values: list[float] = []
+        pie_values: list[float] = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -554,13 +554,13 @@ def _build_plotly_figure_from_rows(section: dict[str, Any]) -> go.Figure | None:
             raw_values = row.get("raw_values")
             values_map = raw_values if isinstance(raw_values, dict) else row.get("values", {})
             if isinstance(values_map, dict):
-                values.append(_coerce_float(values_map.get(first_scenario, 0)))
+                pie_values.append(_coerce_float(values_map.get(first_scenario, 0)))
             else:
-                values.append(0.0)
+                pie_values.append(0.0)
         fig.add_trace(
             go.Pie(
                 labels=labels,
-                values=values,
+                values=pie_values,
                 hole=0.3,
                 marker={"colors": [palette[i % len(palette)] for i in range(len(labels))]},
             )
@@ -625,15 +625,15 @@ def _nice_dtick(max_value: float, target_ticks: int = 8) -> float:
     normalized = raw_step / magnitude
 
     if normalized <= 1:
-        nice = 1
+        nice = 1.0
     elif normalized <= 2:
-        nice = 2
+        nice = 2.0
     elif normalized <= 2.5:
         nice = 2.5
     elif normalized <= 5:
-        nice = 5
+        nice = 5.0
     else:
-        nice = 10
+        nice = 10.0
 
     return nice * magnitude
 
