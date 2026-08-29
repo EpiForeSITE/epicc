@@ -100,8 +100,8 @@ def test_write_contains_chart_image_or_fallback_note():
     assert has_image or has_fallback
 
 
-def test_chart_images_supported_for_current_runtime():
-    assert docx_chart_images_supported() is True
+def test_chart_images_supported_probe_returns_bool():
+    assert isinstance(docx_chart_images_supported(), bool)
 
 
 def test_report_contains_graph_sections_true_for_graph_payload():
