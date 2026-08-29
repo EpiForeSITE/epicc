@@ -182,40 +182,66 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
             if sec_type == "markdown":
                 content = str(section.get("content", ""))
                 has_rendered_markdown_line = False
+                in_math_block = False
+                math_block_lines: list[str] = []
                 for line in content.splitlines():
                     line = line.strip()
-                    if not line or line == "$$":
+
+                    if line == "$$":
+                        if in_math_block:
+                            math_text = " ".join(math_block_lines).strip()
+                            if math_text:
+                                body_parts.append(_w_math_paragraph(math_text))
+                                has_rendered_markdown_line = True
+                            math_block_lines = []
+                            in_math_block = False
+                        else:
+                            in_math_block = True
+                            math_block_lines = []
+                        continue
+
+                    if in_math_block:
+                        if line:
+                            math_block_lines.append(line)
+                        continue
+
+                    if not line:
                         continue
 
                     if line.startswith("### "):
                         if has_rendered_markdown_line:
                             body_parts.append(_w_paragraph(" "))
-                        body_parts.append(_w_paragraph(_strip_markdown_inline(line[4:]), bold=True))
+                        body_parts.append(_w_paragraph_with_math(line[4:], bold=True))
                         has_rendered_markdown_line = True
                     elif line.startswith("## "):
                         if has_rendered_markdown_line:
                             body_parts.append(_w_paragraph(" "))
-                        body_parts.append(_w_paragraph(_strip_markdown_inline(line[3:]), bold=True))
+                        body_parts.append(_w_paragraph_with_math(line[3:], bold=True))
                         has_rendered_markdown_line = True
                     elif line.startswith("# "):
                         if has_rendered_markdown_line:
                             body_parts.append(_w_paragraph(" "))
-                        body_parts.append(_w_paragraph(_strip_markdown_inline(line[2:]), bold=True))
+                        body_parts.append(_w_paragraph_with_math(line[2:], bold=True))
                         has_rendered_markdown_line = True
                     elif line.startswith("- "):
-                        body_parts.append(_w_paragraph(f"• {_strip_markdown_inline(line[2:])}"))
+                        body_parts.append(_w_paragraph_with_math(line[2:], prefix="• "))
                         has_rendered_markdown_line = True
                     elif re.match(r"^\d+\.\s+", line):
                         match = re.match(r"^(\d+)\.\s+(.*)$", line)
                         if match:
                             idx, content_line = match.groups()
-                            body_parts.append(_w_paragraph(f"{idx}. {_strip_markdown_inline(content_line)}"))
+                            body_parts.append(_w_paragraph_with_math(content_line, prefix=f"{idx}. "))
                         else:
-                            body_parts.append(_w_paragraph(_strip_markdown_inline(line)))
+                            body_parts.append(_w_paragraph_with_math(line))
                         has_rendered_markdown_line = True
                     else:
-                        body_parts.append(_w_paragraph(_strip_markdown_inline(_latex_to_text(line))))
+                        body_parts.append(_w_paragraph_with_math(line))
                         has_rendered_markdown_line = True
+
+                if in_math_block and math_block_lines:
+                    math_text = " ".join(math_block_lines).strip()
+                    if math_text:
+                        body_parts.append(_w_math_paragraph(math_text))
                 has_rendered_section = True
 
             elif sec_type in {"table", "graph"}:
@@ -280,6 +306,7 @@ def build_report_docx_bytes(report_payload: dict[str, Any]) -> bytes:
 <w:document
   xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
   xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
   xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
@@ -669,6 +696,10 @@ def _escape_xml(text: str) -> str:
 
 
 def _strip_markdown_inline(text: str) -> str:
+    # Convert markdown links/images to visible text to avoid leaking markdown
+    # syntax and Word auto-linking raw URLs in exported paragraphs.
+    text = re.sub(r"!\[([^\]]*)\]\(([^\)]+)\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^\)]+)\)", r"\1", text)
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"__(.*?)__", r"\1", text)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
@@ -677,10 +708,86 @@ def _strip_markdown_inline(text: str) -> str:
     return " ".join(text.split())
 
 
-def _latex_to_text(text: str) -> str:
-    text = text.replace("\\LaTeX", "LaTeX")
+def _normalize_markdown_line(text: str) -> str:
+    """Strip markdown styling while preserving LaTeX segments as-is."""
+    stripped = text.strip()
+    if re.fullmatch(r"\$\$.*\$\$", stripped):
+        return stripped
+
+    parts = re.split(r"(\$[^$]+\$|\\\([^\)]*\\\)|\\\[[^\]]*\\\])", text)
+    normalized: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if re.fullmatch(r"\$[^$]+\$|\\\([^\)]*\\\)|\\\[[^\]]*\\\]", part):
+            normalized.append(part)
+        else:
+            cleaned = _strip_markdown_inline(part)
+            if cleaned:
+                normalized.append(cleaned)
+    return " ".join(normalized)
+
+
+def _w_paragraph_with_math(text: str, *, bold: bool = False, prefix: str = "") -> str:
+    segments = _split_markdown_math_segments(text)
+    parts: list[str] = ["<w:p>"]
+
+    if prefix:
+        parts.append(_w_text_run(prefix, bold=bold))
+
+    for segment_type, segment_value in segments:
+        if segment_type == "math":
+            parts.append(_w_math(segment_value))
+        elif segment_value:
+            parts.append(_w_text_run(segment_value, bold=bold))
+
+    parts.append("</w:p>")
+    return "".join(parts)
+
+
+def _w_math_paragraph(latex_text: str) -> str:
+    return f"<w:p>{_w_math(latex_text)}</w:p>"
+
+
+def _w_math(latex_text: str) -> str:
+    content = _escape_xml(_latex_math_to_display_text(latex_text.strip()))
+    return f"<m:oMath><m:r><m:t>{content}</m:t></m:r></m:oMath>"
+
+
+def _w_text_run(text: str, *, bold: bool = False) -> str:
+    run_pr = "<w:rPr><w:b/></w:rPr>" if bold else ""
+    content = _escape_xml(_strip_markdown_inline(text))
+    if not content:
+        return ""
+    return f"<w:r>{run_pr}<w:t xml:space=\"preserve\">{content}</w:t></w:r>"
+
+
+def _split_markdown_math_segments(text: str) -> list[tuple[str, str]]:
+    normalized = _normalize_markdown_line(text)
+    pattern = r"(\$\$.*?\$\$|\$[^$]+\$|\\\([^\)]*\\\)|\\\[[^\]]*\\\])"
+    parts = re.split(pattern, normalized)
+
+    segments: list[tuple[str, str]] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("$$") and part.endswith("$$"):
+            segments.append(("math", part[2:-2].strip()))
+        elif part.startswith("$") and part.endswith("$"):
+            segments.append(("math", part[1:-1].strip()))
+        elif part.startswith("\\(") and part.endswith("\\)"):
+            segments.append(("math", part[2:-2].strip()))
+        elif part.startswith("\\[") and part.endswith("\\]"):
+            segments.append(("math", part[2:-2].strip()))
+        else:
+            segments.append(("text", part))
+
+    return segments
+
+
+def _latex_math_to_display_text(text: str) -> str:
     text = re.sub(r"\\text\s*\{([^}]*)\}", r"\1", text)
-    text = re.sub(r"\\[a-zA-Z]+", "", text)
-    text = text.replace("{", "").replace("}", "")
-    text = text.replace("$$", "")
+    text = re.sub(r"\\mathrm\s*\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"\\operatorname\s*\{([^}]*)\}", r"\1", text)
+    text = text.replace(r"\\LaTeX", "LaTeX")
     return " ".join(text.split())

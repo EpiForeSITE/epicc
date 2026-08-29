@@ -15,6 +15,11 @@ from epicc.ui.state import has_results, _PRINT_REQUESTED_KEY, _PRINT_TOKEN_KEY
 from epicc.ui import report_exports
 
 
+def _build_docx_export_bytes(model: BaseSimulationModel, run_output: dict[str, Any]) -> bytes:
+    payload = report_exports.build_report_payload(model, run_output)
+    return report_exports.build_report_docx_bytes(payload)
+
+
 @st.dialog("Save Parameters")
 def _export_dialog(
     model_name: str,
@@ -176,17 +181,35 @@ def render_docx_export_button(
 ) -> None:
     """Render a direct Save report as DOCX button."""
     rc = container if container is not None else st
+    model_key = model.human_name().lower().replace(" ", "_")
+    data_state_key = f"docx_data_{model_key}"
+    token_state_key = f"docx_token_{model_key}"
+
+    if run_output is not None:
+        run_token = hash(repr(run_output))
+        if st.session_state.get(token_state_key) != run_token:
+            st.session_state[token_state_key] = run_token
+            st.session_state.pop(data_state_key, None)
 
     if run_output is None or not has_results():
-        rc.button("Save report as DOCX", disabled=True, use_container_width=True)
+        rc.button("Save report as DOCX (please wait)", disabled=True, use_container_width=True)
+        return
+
+    if data_state_key not in st.session_state:
+        if rc.button("Save report as DOCX", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Preparing DOCX report..."):
+                    st.session_state[data_state_key] = _build_docx_export_bytes(model, run_output)
+                st.success("DOCX report is ready. Click again to download.")
+                st.rerun()
+            except Exception as exc:
+                rc.error(f"Could not generate DOCX report: {exc}")
         return
 
     try:
-        payload = report_exports.build_report_payload(model, run_output)
-        data = report_exports.build_report_docx_bytes(payload)
         rc.download_button(
             label="Save report as DOCX",
-            data=data,
+            data=st.session_state[data_state_key],
             file_name=f"{model.human_name().lower().replace(' ', '_')}_report.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             type="primary",

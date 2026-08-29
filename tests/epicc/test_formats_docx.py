@@ -17,7 +17,7 @@ def _make_report_payload(title: str = "Test Report") -> dict:
             "sections": [
                 {
                     "type": "markdown",
-                    "content": "## Overview\n- **Strong point**\n$$\\LaTeX \\text{ test.}$$\nSome text here.",
+                    "content": "## Overview\n- **Strong point**\nSee [CDC guidance](https://cdc.gov).\n$$\\LaTeX \\text{ test.}$$\nSome text here.",
                 },
                 {
                     "type": "graph",
@@ -79,9 +79,12 @@ def test_write_contains_markdown_content():
         doc_xml = zf.read("word/document.xml").decode()
     assert "Some text here" in doc_xml
     assert "Strong point" in doc_xml
+    assert "CDC guidance" in doc_xml
+    assert "[CDC guidance](https://cdc.gov)" not in doc_xml
+    assert "<m:oMath>" in doc_xml
     assert "LaTeX test." in doc_xml
+    assert "\\text{" not in doc_xml
     assert "**" not in doc_xml
-    assert "$$" not in doc_xml
     assert "Chart type: bar" not in doc_xml
 
 
