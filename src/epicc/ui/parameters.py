@@ -731,7 +731,14 @@ def render_sidebar_parameters(
         param_identity = DEFAULT_PARAM_IDENTITY
 
     should_refresh = False
-    if get_active_param_identity() != param_identity:
+    previous_identity = get_active_param_identity()
+    if previous_identity is None:
+        # Nothing was recorded, so nothing changed -- there is no preset to
+        # switch away from. Recording it without a refresh keeps a session
+        # Streamlit rebuilt after a websocket reconnect from resetting the
+        # widget values the browser just replayed into it.
+        set_active_param_identity(param_identity)
+    elif previous_identity != param_identity:
         set_active_param_identity(param_identity)
         params = reset_params()
         clear_results()

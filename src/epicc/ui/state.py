@@ -54,7 +54,14 @@ def set_preview(model: "BaseSimulationModel", label: str) -> None:
 
 
 def sync_active_model(model_key: str) -> dict[str, Any]:
-    if st.session_state.get(_ACTIVE_MODEL_KEY) != model_key:
+    if _ACTIVE_MODEL_KEY not in st.session_state:
+        # No model was active, so there is nothing to switch away from and
+        # nothing to discard. Adopting the key quietly matters when Streamlit
+        # rebuilds a session after a websocket reconnect: the browser replays
+        # the widget values but not this key, and treating that as a model
+        # change would reset the user's parameters out from under them.
+        st.session_state[_ACTIVE_MODEL_KEY] = model_key
+    elif st.session_state[_ACTIVE_MODEL_KEY] != model_key:
         st.session_state[_ACTIVE_MODEL_KEY] = model_key
         st.session_state[_PARAMS_KEY] = {}
         clear_results()
