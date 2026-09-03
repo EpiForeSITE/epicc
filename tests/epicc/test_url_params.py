@@ -968,12 +968,18 @@ def test_clearing_an_already_empty_query_string_is_a_no_op(
 
 
 def _forget_reconnect_casualties(app: AppTest) -> None:
-    """Drop the session-state keys a rebuilt session would not get back.
+    """Drop every session-state key a rebuilt session would not get back.
 
-    Widget values come back from the browser; everything else does not.
+    Streamlit rebuilds a session whose websocket has been away longer than
+    ``server.disconnectedSessionTTL``. The browser replays its widget values
+    into the new one; nothing else survives. So keep exactly the keys the last
+    run rendered a widget for, and drop the rest -- the app's own bookkeeping
+    (``active_model_key``, ``active_param_identity``, the scenario count and id
+    list, ``params``, the results) among them.
     """
-    for key in ("_url_params_applied", "active_model_key", "params", "results_payload"):
-        if key in app.session_state:
+    widget_keys = {getattr(node, "key", None) for node in app.main}
+    for key in list(app.session_state.filtered_state):
+        if key not in widget_keys:
             del app.session_state[key]
 
 
@@ -1000,6 +1006,52 @@ def test_a_rebuilt_session_keeps_the_model_the_user_switched_to() -> None:
     assert app.session_state["model_selector"] == TB_LABEL
     # The address bar catches up with the session, not the other way round.
     assert app.query_params["model"][0] == "tb_isolation"
+
+
+def test_a_rebuilt_session_keeps_the_scenarios_the_user_edited() -> None:
+    # The scenario editor's row count and id list are bookkeeping, not widgets,
+    # so they go the same way the rest of the plain state does. Seeding them
+    # from the model's defaults put the model's scenarios back over the labels
+    # and values the browser had just replayed.
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "measles"})
+    app.run(timeout=30)
+    assert not app.exception
+
+    def scenario_label() -> Any:
+        return next(
+            widget
+            for widget in app.text_input
+            if widget.key and widget.key.endswith(":scen_0:label")
+        )
+
+    def scenario_cases() -> Any:
+        return next(
+            widget
+            for widget in app.number_input
+            if widget.key and widget.key.endswith(":scen_0:n_cases")
+        )
+
+    scenario_label().set_value("Small outbreak")
+    scenario_cases().set_value(30)
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.query_params["scen.22_cases.label"][0] == "Small outbreak"
+
+    # As with the parameters, the edit that meets the rebuilt session is one
+    # ahead of the link, so nothing can restore it but the replayed widgets.
+    scenario_label().set_value("Tiny outbreak")
+    scenario_cases().set_value(40)
+    _forget_reconnect_casualties(app)
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:label"] == "Tiny outbreak"
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:n_cases"] == 40
+    assert app.session_state[f"{MEASLES_LABEL}__scen_count"] == 3
+    assert app.query_params["scen.22_cases.label"][0] == "Tiny outbreak"
+    assert app.query_params["scen.22_cases.n_cases"][0] == "40"
 
 
 def test_a_rebuilt_session_keeps_the_values_the_user_edited() -> None:
