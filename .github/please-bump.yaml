@@ -1,0 +1,11 @@
+version: 1
+groups:
+  epicc:
+    paths:
+      - src/
+      - app.py
+      - pyproject.toml
+    rules:
+      - preset: python-pyproject
+      - preset: python-dunder
+        files: [src/epicc/__init__.py]
