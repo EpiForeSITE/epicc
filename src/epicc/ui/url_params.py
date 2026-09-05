@@ -581,14 +581,26 @@ def write_url_state(
 
     Uses ``from_dict`` so parameters returned to their defaults disappear from
     the URL instead of lingering.
+
+    Called on every script run, most of which change nothing. Writing anyway
+    would still cost a history entry each time: Streamlit answers a query-param
+    update by calling ``history.pushState``, and browsers keep only the last
+    ~50 entries per tab, so a session's worth of no-op writes pushes whatever
+    the user was browsing before out of Back's reach.
     """
-    st.query_params.from_dict(encode_state(model, params, scenarios))
+    query = encode_state(model, params, scenarios)
+    if query == st.query_params.to_dict():
+        return
+    st.query_params.from_dict(query)
 
 
 def clear_url_state() -> None:
     """Drop the state from the URL, leaving Streamlit's own keys in place.
 
     Used when the on-screen state cannot honestly be expressed as a link, so
-    that no stale or misleading permalink is left behind.
+    that no stale or misleading permalink is left behind. Like
+    :func:`write_url_state`, silent when there is nothing to change.
     """
+    if not st.query_params.to_dict():
+        return
     st.query_params.clear()

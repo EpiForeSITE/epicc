@@ -17,13 +17,16 @@ from epicc.model.schema import (
     TableBlock,
     TableRow,
 )
+from epicc.ui import url_params
 from epicc.ui.parameters import native_value
 from epicc.ui.url_params import (
     build_slug_registry,
+    clear_url_state,
     decode_state,
     encode_state,
     is_reserved,
     model_slug,
+    write_url_state,
 )
 
 MEASLES_LABEL = "Measles Outbreak Cost Estimation"
@@ -894,3 +897,188 @@ def test_app_escapes_query_text_in_warnings() -> None:
     assert len(warned) == 1
     # Balanced delimiters mean the injected Markdown stayed inside the span.
     assert warned[0].count("`") == 2
+
+
+# --------------------------------------------------------------------------
+# Writing only what changed
+# --------------------------------------------------------------------------
+
+
+class _RecordingQueryParams:
+    """Stand-in for ``st.query_params`` that counts the writes it is given."""
+
+    def __init__(self, initial: dict[str, str] | None = None) -> None:
+        self._values: dict[str, str] = dict(initial or {})
+        self.writes = 0
+        self.clears = 0
+
+    def to_dict(self) -> dict[str, str]:
+        return dict(self._values)
+
+    def from_dict(self, query: dict[str, str]) -> None:
+        self.writes += 1
+        self._values = dict(query)
+
+    def clear(self) -> None:
+        self.clears += 1
+        self._values = {}
+
+
+def test_an_unchanged_query_string_is_not_rewritten(
+    measles: BaseSimulationModel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every rewrite costs a browser history entry, and the app rewrites on
+    # every script run, so a run that changes nothing must write nothing.
+    params = {
+        param_id: native_value(spec.default, spec)
+        for param_id, spec in (measles.parameter_specs or {}).items()
+    }
+    recorder = _RecordingQueryParams()
+    monkeypatch.setattr(url_params.st, "query_params", recorder)
+
+    write_url_state(measles, params)
+    assert recorder.writes == 1
+    assert recorder.to_dict() == {"model": "measles"}
+
+    write_url_state(measles, params)
+    assert recorder.writes == 1
+
+    params["contacts_per_case"] = 200.0
+    write_url_state(measles, params)
+    assert recorder.writes == 2
+    assert recorder.to_dict()["param.contacts_per_case"] == "200"
+
+
+def test_clearing_an_already_empty_query_string_is_a_no_op(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _RecordingQueryParams({"model": "measles"})
+    monkeypatch.setattr(url_params.st, "query_params", recorder)
+
+    clear_url_state()
+    assert recorder.clears == 1
+
+    clear_url_state()
+    assert recorder.clears == 1
+
+
+# --------------------------------------------------------------------------
+# Sessions Streamlit rebuilt underneath the app
+# --------------------------------------------------------------------------
+
+
+def _forget_reconnect_casualties(app: AppTest) -> None:
+    """Drop every session-state key a rebuilt session would not get back.
+
+    Streamlit rebuilds a session whose websocket has been away longer than
+    ``server.disconnectedSessionTTL``. The browser replays its widget values
+    into the new one; nothing else survives. So keep exactly the keys the last
+    run rendered a widget for, and drop the rest -- the app's own bookkeeping
+    (``active_model_key``, ``active_param_identity``, the scenario count and id
+    list, ``params``, the results) among them.
+    """
+    widget_keys = {getattr(node, "key", None) for node in app.main}
+    for key in list(app.session_state.filtered_state):
+        if key not in widget_keys:
+            del app.session_state[key]
+
+
+def test_a_rebuilt_session_keeps_the_model_the_user_switched_to() -> None:
+    # Streamlit drops a session whose websocket has been gone for
+    # server.disconnectedSessionTTL (two minutes by default) and builds a fresh
+    # one on reconnect. The browser replays its widget values into it, but the
+    # plain session-state keys -- _url_params_applied among them -- are gone, so
+    # the app sees an unapplied link sitting over live widget state. Applying it
+    # there put the previous model back, which is what an idle tab looked like
+    # from the outside: switching models doing nothing at all.
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "measles"})
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.session_state["model_selector"] == MEASLES_LABEL
+
+    app.session_state["model_selector"] = TB_LABEL
+    _forget_reconnect_casualties(app)
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state["model_selector"] == TB_LABEL
+    # The address bar catches up with the session, not the other way round.
+    assert app.query_params["model"][0] == "tb_isolation"
+
+
+def test_a_rebuilt_session_keeps_the_scenarios_the_user_edited() -> None:
+    # The scenario editor's row count and id list are bookkeeping, not widgets,
+    # so they go the same way the rest of the plain state does. Seeding them
+    # from the model's defaults put the model's scenarios back over the labels
+    # and values the browser had just replayed.
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "measles"})
+    app.run(timeout=30)
+    assert not app.exception
+
+    def scenario_label() -> Any:
+        return next(
+            widget
+            for widget in app.text_input
+            if widget.key and widget.key.endswith(":scen_0:label")
+        )
+
+    def scenario_cases() -> Any:
+        return next(
+            widget
+            for widget in app.number_input
+            if widget.key and widget.key.endswith(":scen_0:n_cases")
+        )
+
+    scenario_label().set_value("Small outbreak")
+    scenario_cases().set_value(30)
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.query_params["scen.22_cases.label"][0] == "Small outbreak"
+
+    # As with the parameters, the edit that meets the rebuilt session is one
+    # ahead of the link, so nothing can restore it but the replayed widgets.
+    scenario_label().set_value("Tiny outbreak")
+    scenario_cases().set_value(40)
+    _forget_reconnect_casualties(app)
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:label"] == "Tiny outbreak"
+    assert app.session_state[f"{MEASLES_LABEL}:scen_0:n_cases"] == 40
+    assert app.session_state[f"{MEASLES_LABEL}__scen_count"] == 3
+    assert app.query_params["scen.22_cases.label"][0] == "Tiny outbreak"
+    assert app.query_params["scen.22_cases.n_cases"][0] == "40"
+
+
+def test_a_rebuilt_session_keeps_the_values_the_user_edited() -> None:
+    app = AppTest.from_file("app.py")
+    app.query_params.update({"model": "measles"})
+    app.run(timeout=30)
+    assert not app.exception
+
+    def contacts_input() -> Any:
+        return next(
+            widget
+            for widget in app.number_input
+            if widget.key and widget.key.endswith(":contacts_per_case")
+        )
+
+    contacts_input().set_value(200.0)
+    app.run(timeout=30)
+    assert not app.exception
+    assert app.query_params["param.contacts_per_case"][0] == "200"
+
+    # The next edit arrives on the rerun that finds the rebuilt session, so the
+    # link in the address bar is still one edit behind it.
+    contacts_input().set_value(300.0)
+    _forget_reconnect_casualties(app)
+
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state[f"{MEASLES_LABEL}:contacts_per_case"] == 300.0
+    assert app.query_params["param.contacts_per_case"][0] == "300"

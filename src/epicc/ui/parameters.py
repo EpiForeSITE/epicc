@@ -364,6 +364,43 @@ def _init_scenario_state(
             )
 
 
+def _replayed_scenario_count(model_key: str) -> int:
+    """How many scenario rows already have widget state, counting from the top."""
+    count = 0
+    while _scenario_label_key(model_key, count) in st.session_state:
+        count += 1
+    return count
+
+
+def _adopt_scenario_state(
+    model_key: str,
+    defaults: list[Scenario],
+    specs: dict[str, Parameter],
+) -> None:
+    """Recover the editor's bookkeeping, or seed it from *defaults*.
+
+    The row count and the id list are plain session state, so a session that
+    Streamlit rebuilt after a websocket reconnect loses them while the browser
+    replays the label and variable widgets they describe. Seeding from the
+    defaults there would overwrite the user's scenarios with the model's own,
+    so the rows that came back are counted instead, and their ids taken from
+    the defaults by position -- the same fallback
+    :func:`_collect_scenario_overrides` already applies to a row the user
+    added. Ids that came from a link's ``scenarios`` list cannot be recovered
+    this way and revert to the defaults', but the labels and values the user
+    is looking at survive, which they did not before.
+    """
+    replayed = _replayed_scenario_count(model_key)
+    if not replayed:
+        _init_scenario_state(model_key, defaults, specs)
+        return
+    st.session_state[_scenario_count_key(model_key)] = replayed
+    st.session_state[_scenario_ids_key(model_key)] = [
+        defaults[i].id if i < len(defaults) else f"custom_{i}"
+        for i in range(replayed)
+    ]
+
+
 def reset_scenario_state(
     model_key: str,
     defaults: list[Scenario],
@@ -417,9 +454,9 @@ def _render_scenario_editor(
     cnt_key = _scenario_count_key(model_key)
     ids_key = _scenario_ids_key(model_key)
 
-    # First-time initialization
+    # First-time initialization, or recovery of a rebuilt session's bookkeeping
     if cnt_key not in st.session_state:
-        _init_scenario_state(model_key, default_scenarios, specs)
+        _adopt_scenario_state(model_key, default_scenarios, specs)
 
     count: int = st.session_state[cnt_key]
     ids: list[str] = st.session_state[ids_key]
@@ -731,7 +768,14 @@ def render_sidebar_parameters(
         param_identity = DEFAULT_PARAM_IDENTITY
 
     should_refresh = False
-    if get_active_param_identity() != param_identity:
+    previous_identity = get_active_param_identity()
+    if previous_identity is None:
+        # Nothing was recorded, so nothing changed -- there is no preset to
+        # switch away from. Recording it without a refresh keeps a session
+        # Streamlit rebuilt after a websocket reconnect from resetting the
+        # widget values the browser just replayed into it.
+        set_active_param_identity(param_identity)
+    elif previous_identity != param_identity:
         set_active_param_identity(param_identity)
         params = reset_params()
         clear_results()
