@@ -21,6 +21,7 @@ def test_callout_escapes_dynamic_text(monkeypatch) -> None:
 
 def test_graph_metadata_escapes_dynamic_text(monkeypatch) -> None:
     rendered: list[str] = []
+    plotted: list[object] = []
     renderer = report.GraphBlockRenderer(
         GraphBlock(
             type="graph",
@@ -37,9 +38,13 @@ def test_graph_metadata_escapes_dynamic_text(monkeypatch) -> None:
         "markdown",
         lambda content, **_kwargs: rendered.append(content),
     )
-    monkeypatch.setattr(report.st, "plotly_chart", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        report.st,
+        "plotly_chart",
+        lambda fig, **_kwargs: plotted.append(fig),
+    )
 
     renderer.render({})
 
-    assert "&lt;strong&gt;Title&lt;/strong&gt;" in rendered[0]
-    assert "&lt;img src=x&gt;" in rendered[1]
+    assert rendered == []
+    assert len(plotted) == 1

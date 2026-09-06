@@ -15,6 +15,7 @@ from epicc.ui.export import (
     cancel_print_request,
     render_parameter_export_modal,
     render_pdf_export_button,
+    render_docx_export_button,
     trigger_print_if_requested,
 )
 from epicc.ui.model_loader import (
@@ -393,6 +394,7 @@ with result_col:
         st.warning("Fix parameter errors to enable simulation.")
         st.stop()
 
+    run_output: dict | None = None
     if run_clicked:
         with st.spinner(f"Running {selected_label}..."):
             run_output = active_model.run(
@@ -412,6 +414,11 @@ with result_col:
 
     st.divider()
     render_pdf_export_button(container=result_col)
+    render_docx_export_button(
+        active_model,
+        run_output if run_output is not None else (get_run_output() if has_results() else None),
+        container=result_col,
+    )
 
     # Last: the print script measures the charts, so it has to reach the browser
     # after the report they belong to has been rendered.

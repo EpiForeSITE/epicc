@@ -10,7 +10,14 @@ from pydantic import BaseModel
 
 from epicc.formats import get_format, iter_formats
 from epicc.formats.base import BaseFormat
+from epicc.model.base import BaseSimulationModel
 from epicc.ui.state import has_results, _PRINT_REQUESTED_KEY, _PRINT_TOKEN_KEY
+from epicc.ui import report_exports
+
+
+def _build_docx_export_bytes(model: BaseSimulationModel, run_output: dict[str, Any]) -> bytes:
+    payload = report_exports.build_report_payload(model, run_output)
+    return report_exports.build_report_docx_bytes(payload)
 
 
 @st.dialog("Save Parameters")
@@ -21,7 +28,7 @@ def _export_dialog(
     pydantic_model: type[BaseModel] | None = None
 ) -> None:
     safe_name = model_name.lower().replace(" ", "_")
-    
+
     st.markdown("""
     **EPICC** supports a variety of formats for exporting your parameter settings, each with its own advantages:
 
@@ -30,20 +37,19 @@ def _export_dialog(
 
     If you are unsure, YAML is a good default choice for its simplicity and readability.
     """)
-    
-    # Prepare format options
+
     format_options = [cls.label for _, cls in unique_formats]
-    default_index = 0  # YAML is default
+    default_index = 0
     if "YAML" in format_options:
         default_index = format_options.index("YAML")
-    
+
     selected_format = st.selectbox(
         "Select file format:",
         options=format_options,
         index=default_index,
         help="Choose how you'd like to save your parameters"
     )
-    
+
     selected_cls = None
     selected_suffix = None
     for suffix, cls in unique_formats:
@@ -51,7 +57,7 @@ def _export_dialog(
             selected_cls = cls
             selected_suffix = suffix
             break
-    
+
     if selected_cls and selected_suffix:
         try:
             fmt = get_format(Path(f"params.{selected_suffix}"))
@@ -59,7 +65,7 @@ def _export_dialog(
             if pydantic_model is not None:
                 kwargs["pydantic_model"] = pydantic_model
             data = fmt.write(param_data, **kwargs)
-            
+
             st.download_button(
                 label=f"Download {selected_format} file",
                 data=data,
@@ -82,16 +88,14 @@ def render_parameter_export_modal(
     container: Any = None,
 ) -> None:
     rc = container if container is not None else st
-    
-    # Collect unique format classes in registration order.
+
     seen: set[type[BaseFormat]] = set()
     unique: list[tuple[str, type[BaseFormat]]] = []
-    
     for suffix, cls in iter_formats():
         if cls not in seen:
             seen.add(cls)
             unique.append((suffix.lstrip("."), cls))
-    
+
     if rc.button(label, width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}", disabled=disabled):
         _export_dialog(model_name, param_data, unique, pydantic_model)
 
@@ -135,9 +139,9 @@ def trigger_print_if_requested() -> None:
     if not has_results():
         st.session_state[_PRINT_REQUESTED_KEY] = False
         return
-
+    
     trigger_token = st.session_state.get(_PRINT_TOKEN_KEY, 0)
-
+    
     # What the hell is this, Streamlit? Why can't I just run JS without this nonsense? Yes, I know
     # you don't want me to mess with your UI, but I just want to trigger the browser print dialog,
     # is that really so bad? I even told you it was okay to run unsafe JS, but no, you had to run
@@ -162,12 +166,54 @@ def trigger_print_if_requested() -> None:
         js = f.read().decode()
         js64 = base64.b64encode(js.encode()).decode()
 
-    print_assign = f"window.__epiccPrintToken = {trigger_token}"
-    looks_malicious = f"eval(atob('{js64}'))"
-
     st.html(
-        f"<script>{print_assign}; {looks_malicious}</script>",
+        f"<script>window.__epiccPrintToken = {trigger_token}; eval(atob('{js64}'))</script>",
         unsafe_allow_javascript=True,
     )
 
     st.session_state[_PRINT_REQUESTED_KEY] = False
+
+
+def render_docx_export_button(
+    model: BaseSimulationModel,
+    run_output: dict[str, Any] | None,
+    container: Any = None,
+) -> None:
+    """Render a direct Save report as DOCX button."""
+    rc = container if container is not None else st
+    model_key = model.human_name().lower().replace(" ", "_")
+    data_state_key = f"docx_data_{model_key}"
+    token_state_key = f"docx_token_{model_key}"
+
+    if run_output is not None:
+        run_token = hash(repr(run_output))
+        if st.session_state.get(token_state_key) != run_token:
+            st.session_state[token_state_key] = run_token
+            st.session_state.pop(data_state_key, None)
+
+    if run_output is None or not has_results():
+        rc.button("Save report as DOCX (please wait)", disabled=True, use_container_width=True)
+        return
+
+    if data_state_key not in st.session_state:
+        if rc.button("Save report as DOCX", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Preparing DOCX report..."):
+                    st.session_state[data_state_key] = _build_docx_export_bytes(model, run_output)
+                st.success("DOCX report is ready. Click again to download.")
+                st.rerun()
+            except Exception as exc:
+                rc.error(f"Could not generate DOCX report: {exc}")
+        return
+
+    try:
+        rc.download_button(
+            label="Save report as DOCX",
+            data=st.session_state[data_state_key],
+            file_name=f"{model.human_name().lower().replace(' ', '_')}_report.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary",
+            use_container_width=True,
+        )
+    except Exception as exc:
+        rc.error(f"Could not generate DOCX report: {exc}")
