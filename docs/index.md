@@ -11,6 +11,12 @@ This section documents both major user workflows in EPICC:
 - [Model Editor Guide](editor.md)
 - [User stories and status notes](stories.md)
 
+## Schema
+
+- [Model schema reference](schema.md) (generated from `src/epicc/model/schema.py`)
+- [Model reference](reference.md) (human-readable guide with examples)
+- [Tutorial: Build a simple model](tutorial-simple-model.md)
+
 ## Launch the App
 
 Live app:
