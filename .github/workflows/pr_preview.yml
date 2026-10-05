@@ -1,0 +1,142 @@
+name: PR Live Preview
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image from Containerfile
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile
+          push: false
+          load: true
+          tags: epicc:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build stlite preview bundle
+        run: |
+          docker run --rm --user root \
+            -v "$PWD:/workspaces/${{ github.event.repository.name }}" \
+            -w /workspaces/${{ github.event.repository.name }} \
+            epicc:local \
+            sh -c "uv sync --frozen && uv run scripts/build.py --app app.py --out dist"
+
+      - name: Prepare live preview directory
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          preview_dir="preview-site/previews/pr-${PR_NUMBER}"
+          mkdir -p "${preview_dir}"
+          cp -R dist/. "${preview_dir}/"
+          touch preview-site/.nojekyll
+
+      - name: Publish preview to gh-pages branch
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: preview-site
+          keep_files: true
+          force_orphan: false
+
+      - name: Upload preview artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: stlite-preview-pr-${{ github.event.pull_request.number }}
+          path: dist
+          retention-days: 7
+
+      - name: Comment preview link on PR
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_NAME: stlite-preview-pr-${{ github.event.pull_request.number }}
+        with:
+          script: |
+            const marker = "<!-- epicc-pr-preview -->";
+            const issue_number = context.payload.pull_request.number;
+            const sameRepoPr = context.payload.pull_request.head.repo.full_name === context.repo.owner + "/" + context.repo.repo;
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const previewUrl = `https://rawcdn.githack.com/${context.repo.owner}/${context.repo.repo}/gh-pages/previews/pr-${issue_number}/index.html`;
+
+            core.info(`PR number: ${issue_number}`);
+            core.info(`Same-repo PR: ${sameRepoPr}`);
+            core.info(`Workflow run URL: ${runUrl}`);
+            core.info(`Live preview URL: ${previewUrl}`);
+            core.info(`Artifact name: ${process.env.ARTIFACT_NAME}`);
+
+            const bodyLines = [
+              marker,
+              "Live preview is ready.",
+              "",
+              `- Artifact: **${process.env.ARTIFACT_NAME}**`,
+              `- Run details: ${runUrl}`,
+            ];
+
+            if (sameRepoPr) {
+              bodyLines.splice(3, 0, `- Live URL: ${previewUrl}`);
+              bodyLines.push(
+                "",
+                "If the live URL is not updated yet, use the artifact:",
+                "1. Download and extract the artifact.",
+                "2. Serve the extracted folder with a static server.",
+                "3. Open index.html in your browser.",
+              );
+            } else {
+              bodyLines.push(
+                "",
+                "Live URL publishing is skipped for fork PRs due write-permission limits.",
+                "Use the artifact from this run to test the preview.",
+              );
+            }
+
+            const body = bodyLines.join("\n");
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }
