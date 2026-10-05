@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import IO, Any
+
+from pydantic import BaseModel
+
+from epicc.formats import get_format
+from epicc.model.base import BaseSimulationModel
+
+
+def format_value(value: Any, equation_spec: Any = None) -> str:
+    """Format a computed value for display in tables."""
+    if isinstance(value, (int, float)):
+        is_currency = equation_spec and getattr(equation_spec, "unit", None) in (
+            "USD",
+            "dollars",
+            "$",
+        )
+        if abs(value) >= 1000:
+            formatted = f"{value:,.0f}"
+        elif abs(value) >= 100:
+            formatted = f"{value:,.2f}"
+        elif abs(value) >= 1:
+            formatted = f"{value:.2f}"
+        else:
+            formatted = f"{value:.4f}"
+        return f"${formatted}" if is_currency else formatted
+    return str(value)
+
+
+def _load_typed_params(
+    path: Path, data: IO[bytes], model: type[BaseModel]
+) -> dict[str, Any]:
+    reader = get_format(path)
+    opaque, _ = reader.read(data)
+    typed = model.model_validate(opaque)
+    return typed.model_dump(by_alias=True)
+
+
+def parse_preset_from_file(
+    filename: str,
+    data: IO[bytes],
+    parameter_model: type[BaseModel],
+) -> dict[str, Any]:
+    data.seek(0)
+    return _load_typed_params(Path(filename), data, parameter_model)
+
+
+def load_model_params(
+    model: BaseSimulationModel,
+    uploaded_params: IO[bytes] | None = None,
+    uploaded_name: str | None = None,
+    preset_params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if uploaded_params is not None:
+        if not uploaded_name:
+            raise ValueError("Uploaded parameter files must include a filename.")
+        uploaded_params.seek(0)
+        return _load_typed_params(
+            Path(uploaded_name),
+            uploaded_params,
+            model.parameter_model(),
+        )
+
+    defaults = model.default_params()
+    if preset_params is not None:
+        defaults = {**defaults, **preset_params}
+    return defaults

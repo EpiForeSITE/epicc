@@ -1,0 +1,218 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+import base64
+import importlib.resources
+
+import streamlit as st
+from pydantic import BaseModel
+
+from epicc.formats import get_format, iter_formats
+from epicc.formats.base import BaseFormat
+from epicc.model.base import BaseSimulationModel
+from epicc.ui.state import has_results, _PRINT_REQUESTED_KEY, _PRINT_TOKEN_KEY
+from epicc.ui import report_exports
+
+
+def _build_docx_export_bytes(model: BaseSimulationModel, run_output: dict[str, Any]) -> bytes:
+    payload = report_exports.build_report_payload(model, run_output)
+    return report_exports.build_report_docx_bytes(payload)
+
+
+@st.dialog("Save Parameters")
+def _export_dialog(
+    model_name: str,
+    param_data: dict[str, Any],
+    unique_formats: list[tuple[str, type[BaseFormat]]],
+    pydantic_model: type[BaseModel] | None = None
+) -> None:
+    safe_name = model_name.lower().replace(" ", "_")
+
+    st.markdown("""
+    **EPICC** supports a variety of formats for exporting your parameter settings, each with its own advantages:
+
+    - **Excel (XLSX)**: A familiar spreadsheet format that opens in Microsoft Excel, Google Sheets, or other spreadsheet applications.
+    - **YAML**: A text-based format, ideal for easy sharing. Can be edited in any text editor.
+
+    If you are unsure, YAML is a good default choice for its simplicity and readability.
+    """)
+
+    format_options = [cls.label for _, cls in unique_formats]
+    default_index = 0
+    if "YAML" in format_options:
+        default_index = format_options.index("YAML")
+
+    selected_format = st.selectbox(
+        "Select file format:",
+        options=format_options,
+        index=default_index,
+        help="Choose how you'd like to save your parameters"
+    )
+
+    selected_cls = None
+    selected_suffix = None
+    for suffix, cls in unique_formats:
+        if cls.label == selected_format:
+            selected_cls = cls
+            selected_suffix = suffix
+            break
+
+    if selected_cls and selected_suffix:
+        try:
+            fmt = get_format(Path(f"params.{selected_suffix}"))
+            kwargs: dict[str, Any] = {}
+            if pydantic_model is not None:
+                kwargs["pydantic_model"] = pydantic_model
+            data = fmt.write(param_data, **kwargs)
+
+            st.download_button(
+                label=f"Download {selected_format} file",
+                data=data,
+                file_name=f"{safe_name}_params.{selected_suffix}",
+                mime=selected_cls.mime_type,
+                type="primary",
+                use_container_width=True
+            )
+        except Exception as exc:
+            st.error(f"Could not generate {selected_format} file: {exc}")
+
+
+def render_parameter_export_modal(
+    model_name: str,
+    param_data: dict[str, Any],
+    *,
+    label: str = "Save Parameters",
+    disabled: bool = False,
+    pydantic_model: type[BaseModel] | None = None,
+    container: Any = None,
+) -> None:
+    rc = container if container is not None else st
+
+    seen: set[type[BaseFormat]] = set()
+    unique: list[tuple[str, type[BaseFormat]]] = []
+    for suffix, cls in iter_formats():
+        if cls not in seen:
+            seen.add(cls)
+            unique.append((suffix.lstrip("."), cls))
+
+    if rc.button(label, width='stretch', key=f"save_params_btn_{model_name.lower().replace(' ', '_')}", disabled=disabled):
+        _export_dialog(model_name, param_data, unique, pydantic_model)
+
+
+def cancel_print_request() -> None:
+    """Drop a pending print request that can no longer be served."""
+
+    st.session_state[_PRINT_REQUESTED_KEY] = False
+
+
+def _request_print() -> None:
+    if not has_results():
+        return
+
+    st.session_state[_PRINT_REQUESTED_KEY] = True
+    st.session_state[_PRINT_TOKEN_KEY] = st.session_state.get(_PRINT_TOKEN_KEY, 0) + 1
+
+
+def render_pdf_export_button(container: Any = None) -> None:
+    # Render a direct Save report as PDF button.
+    #
+    # The request is recorded in an on_click callback rather than from the
+    # button's return value. Callbacks run before the rerun, so the flag is
+    # already set wherever trigger_print_if_requested() sits in the page; read
+    # from the return value it was only seen by the rerun *after* the one the
+    # click caused, which is why the button used to need two clicks.
+    rc = container if container is not None else st
+    rc.button(
+        "Save report as PDF",
+        disabled=not has_results(),
+        width='stretch',
+        type='primary',
+        on_click=_request_print,
+    )
+
+
+def trigger_print_if_requested() -> None:
+    if not st.session_state.get(_PRINT_REQUESTED_KEY):
+        return
+
+    if not has_results():
+        st.session_state[_PRINT_REQUESTED_KEY] = False
+        return
+    
+    trigger_token = st.session_state.get(_PRINT_TOKEN_KEY, 0)
+    
+    # What the hell is this, Streamlit? Why can't I just run JS without this nonsense? Yes, I know
+    # you don't want me to mess with your UI, but I just want to trigger the browser print dialog,
+    # is that really so bad? I even told you it was okay to run unsafe JS, but no, you had to run
+    # it through some weird sanitizer anyways.
+    #
+    # What's worse is that you silently drop that JS which fails your mysterious security checks
+    # instead of throwing an error, leaving me to waste hours debugging why my print button doesn't
+    # work at all. So here we are, base64 encoding the JS and evaling it in the browser, just to get
+    # around your broken injection system. I hope you're proud of yourselves.
+    #
+    # Seriously!?!? This works?
+    #
+    # This is an alternative implementation to something like:
+    #
+    #   https://github.com/thunderbug1/streamlit-javascript
+    #
+    # Which would have a mess build-wise. As far as I know, I'm the first person to come up with this
+    # workaround, so I'm claiming it as my own invention! Don't tell Streamlit.
+    #
+    # By using st.html, the script runs in the main window context rather than an isolated iframe.
+    with importlib.resources.files("epicc").joinpath("js/print_results.js").open("rb") as f:
+        js = f.read().decode()
+        js64 = base64.b64encode(js.encode()).decode()
+
+    st.html(
+        f"<script>window.__epiccPrintToken = {trigger_token}; eval(atob('{js64}'))</script>",
+        unsafe_allow_javascript=True,
+    )
+
+    st.session_state[_PRINT_REQUESTED_KEY] = False
+
+
+def render_docx_export_button(
+    model: BaseSimulationModel,
+    run_output: dict[str, Any] | None,
+    container: Any = None,
+) -> None:
+    """Render a direct, single-click Save report as DOCX button."""
+    rc = container if container is not None else st
+    model_key = model.human_name().lower().replace(" ", "_")
+    data_state_key = f"docx_data_{model_key}"
+    token_state_key = f"docx_token_{model_key}"
+
+    if run_output is not None:
+        run_token = hash(repr(run_output))
+        if st.session_state.get(token_state_key) != run_token:
+            st.session_state[token_state_key] = run_token
+            st.session_state.pop(data_state_key, None)
+
+    if run_output is None or not has_results():
+        rc.button("Save report as DOCX (please wait)", disabled=True, use_container_width=True)
+        return
+
+    try:
+        # ``download_button`` needs its data before the user clicks it. Building
+        # the document from a regular button's return value therefore replaces
+        # that first click with a preparation rerun and leaves a second click to
+        # download. Cache the bytes when the results change so this is a real
+        # download button on its first render, while avoiding work on later
+        # reruns for the same result set.
+        if data_state_key not in st.session_state:
+            with st.spinner("Preparing DOCX report..."):
+                st.session_state[data_state_key] = _build_docx_export_bytes(model, run_output)
+
+        rc.download_button(
+            label="Save report as DOCX",
+            data=st.session_state[data_state_key],
+            file_name=f"{model.human_name().lower().replace(' ', '_')}_report.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary",
+            use_container_width=True,
+        )
+    except Exception as exc:
+        rc.error(f"Could not generate DOCX report: {exc}")

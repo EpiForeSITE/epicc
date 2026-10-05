@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Calculate and analyze epidemiological costs" />
+    <meta name="keywords" content="epidemiology, cost calculator, public health, analysis" />
+    <meta name="author" content="ForeSITE -- Forecasting and Surveillance of Infectious Threats and Epidemics" />
+    <meta name="version" content="1.0.3" />
+
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="epicc" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Epidemiological Cost Calculator (EPICC)" />
+    <meta property="og:description" content="Calculate and analyze epidemiological costs" />
+    <meta property="og:url" content="https://epiForeSITE.github.io/epicc" />
+
+    <!-- TODO: Favicon -->
+    <!-- <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" /> -->
+    <!-- <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" /> -->
+    <!-- <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" /> -->
+    
+    <title>Epidemiological Cost Calculator (EPICC)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
+
+      const config = await fetch('./stlite-config.json')
+        .then(response => response.json());
+
+      const root = document.getElementById("root");
+      mount(config, root);
+    </script>
+  </body>
+</html>
