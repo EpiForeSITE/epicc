@@ -27,6 +27,13 @@ https://epiworldpythonapp.streamlit.app/
 
 Please follow instructions in your console for loading development versions.
 
+## Documentation
+
+- [Docs home](docs/index.md)
+- [Calculator guide](docs/calculator.md)
+- [Model editor guide](docs/editor.md)
+- [User stories](docs/stories.md)
+
 ## Sharing a calculation by URL
 
 The address bar is a permalink. As you change parameters the app rewrites the query
