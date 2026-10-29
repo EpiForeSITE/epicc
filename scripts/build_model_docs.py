@@ -29,7 +29,12 @@ if str(SRC_DIR) not in sys.path:
 
 from epicc.formats import read_from_format  # noqa: E402
 from epicc.model.models import MODEL_REGISTRY  # noqa: E402
-from epicc.model.schema import MarkdownBlock, Model, ParameterGroup  # noqa: E402
+from epicc.model.schema import (  # noqa: E402
+    MarkdownBlock,
+    Model,
+    Parameter,
+    ParameterGroup,
+)
 
 MODELS_DIR = SRC_DIR / "epicc" / "model" / "models"
 DEFAULT_OUT = PROJECT_ROOT / "docs" / "models"
@@ -71,6 +76,19 @@ def value_range(low: Any, high: Any) -> str:
     if low is None and high is None:
         return ""
     return f"{number(low) if low is not None else ''} to {number(high) if high is not None else ''}"
+
+
+def allowed_values(param: Parameter) -> str:
+    """The range of a numeric parameter, or every choice of an enum with its label.
+
+    Enum choices are the values a sharing link (`param.<id>=...`) accepts, so they are
+    listed in the model's own order, each with what the app shows for it.
+    """
+    if param.options:
+        return "<br>".join(
+            f"`{cell(value)}` = {cell(label)}" for value, label in param.options.items()
+        )
+    return value_range(param.min, param.max)
 
 
 def flatten_groups(groups: list[Any]) -> list[tuple[str, list[str]]]:
@@ -120,7 +138,7 @@ def report_prose(markdown: str) -> str:
 
 def parameter_table(model: Model, ids: list[str]) -> list[str]:
     lines = [
-        "| Parameter | Default | Unit | Range | Sources |",
+        "| Parameter | Default | Unit | Range or choices | Sources |",
         "| --- | --- | --- | --- | --- |",
     ]
     for pid in ids:
@@ -129,9 +147,10 @@ def parameter_table(model: Model, ids: list[str]) -> list[str]:
         if param.description:
             name += f"<br>{cell(param.description)}"
         sources = "<br><br>".join(cell(ref) for ref in param.references)
+        default = f"`{cell(param.default)}`" if param.options else number(param.default)
         lines.append(
-            f"| {name} | {number(param.default)} | {cell(param.unit)} "
-            f"| {value_range(param.min, param.max)} | {sources} |"
+            f"| {name} | {default} | {cell(param.unit)} "
+            f"| {allowed_values(param)} | {sources} |"
         )
     return lines
 

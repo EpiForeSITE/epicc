@@ -49,3 +49,16 @@ def test_a_page_carries_the_model_s_parameters_and_their_sources(pages: Path) ->
 def test_report_lists_get_the_blank_line_python_markdown_needs(pages: Path) -> None:
     page = (pages / "measles.md").read_text(encoding="utf-8")
     assert "outbreaks:\n\n- **22 Cases**" in page
+
+
+def test_enum_parameters_list_every_choice_with_its_label(pages: Path) -> None:
+    """A sharing link takes the choice's value, so the page has to name them all."""
+    page = (pages / "tb_isolation.md").read_text(encoding="utf-8")
+    row = next(line for line in page.splitlines() if "`isolation_type`" in line)
+    assert "`HOME_ISO`" in row, "the default is not shown as a value"
+    for choice in (
+        "`HOSP_ISO` = Hospital",
+        "`MOTEL_ISO` = Motel, with nurse",
+        "`HOME_ISO` = Home, with nurse",
+    ):
+        assert choice in row, f"missing {choice}"
