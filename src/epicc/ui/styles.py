@@ -55,6 +55,7 @@ def render_brand_header(
     title: str,
     *,
     version: str | None = None,
+    docs_url: str | None = None,
     container: Any = st,
 ) -> None:
     """Render a compact header using the configured logo artwork and title."""
@@ -81,6 +82,13 @@ def render_brand_header(
             f'<span class="brand-header__version">v{html.escape(version)}</span>'
         )
 
+    docs_link = ""
+    if docs_url:
+        docs_link = (
+            f'<a class="brand-header__docs" href="{html.escape(docs_url)}" '
+            'target="_blank" rel="noopener">Documentation</a>'
+        )
+
     container.markdown(
         f"""
         <div class="brand-header" aria-label="{html.escape(brand.name)}">
@@ -89,7 +97,7 @@ def render_brand_header(
                alt="{html.escape(brand.logo.alt_text)}"
                style="width: {brand.logo.width_px}px;" />
           {dark_logo}
-          <div class="brand-header__title">{html.escape(title)}{version_badge}</div>
+          <div class="brand-header__title">{html.escape(title)}{version_badge}{docs_link}</div>
         </div>
         """,
         unsafe_allow_html=True,

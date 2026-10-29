@@ -18,6 +18,14 @@ class AppConfig(BaseModel):
         description="Link to the latest published release, shown as 'What's new'.",
     )
 
+    docs_url: str | None = Field(
+        default=None,
+        description=(
+            "Link to the documentation website, shown in the header and the app menu. "
+            "Not versioned: every version of the app points at the current docs."
+        ),
+    )
+
 
 class DefaultsConfig(BaseModel):
     decimal_precision: int = Field(

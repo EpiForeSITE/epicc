@@ -1,5 +1,7 @@
 # epicc
 
+[![Documentation](https://img.shields.io/badge/docs-epiforesite.github.io%2Fepicc%2Fdocs-A60F2D)](https://epiforesite.github.io/epicc/docs/)
+
 Streamlit webapp for epiworld.
 
 Please install dependencies with a dependency manager capable of reading `pyproject.toml` files

@@ -2,6 +2,7 @@ app:
   title: Epidemiological Cost Calculator (EPICC)
   description: Browser-based epidemiological cost calculator for configurable disease models.
   releases_url: https://github.com/EpiForeSITE/epicc/releases/latest
+  docs_url: https://epiforesite.github.io/epicc/docs/
 
 defaults:
   decimal_precision: 4
