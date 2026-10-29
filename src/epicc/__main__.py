@@ -52,7 +52,16 @@ from epicc.ui.url_params import (
     write_url_state,
 )
 
-st.set_page_config(page_title=CONFIG.app.title, layout="wide")
+# Each version links to its own documentation (docs/<version>/).
+_DOCS_URL = (
+    CONFIG.app.docs_url.replace("{version}", __version__) if CONFIG.app.docs_url else None
+)
+
+st.set_page_config(
+    page_title=CONFIG.app.title,
+    layout="wide",
+    menu_items={"Get help": _DOCS_URL} if _DOCS_URL else None,
+)
 load_styles(CONFIG.brand)
 initialize_state()
 
@@ -181,7 +190,11 @@ def _discard_preview() -> None:
 
 hdr_title, hdr_controls = st.columns([3, 4.25])
 render_brand_header(
-    CONFIG.brand, CONFIG.app.title, version=__version__, container=hdr_title
+    CONFIG.brand,
+    CONFIG.app.title,
+    version=__version__,
+    docs_url=_DOCS_URL,
+    container=hdr_title,
 )
 
 col_model, col_load, col_editor = hdr_controls.columns([2.4, 0.6, 1.25], vertical_alignment="center")
@@ -225,6 +238,12 @@ if selected_label is None:
         )
         st.stop()
 
+    _docs_line = (
+        f"\n - **Read the documentation:** The [EPICC documentation]({_DOCS_URL})"
+        " explains every model, its parameters and their sources."
+        if _DOCS_URL
+        else ""
+    )
     _releases_line = (
         f"\n - **See what's new:** Check the [latest release notes]({CONFIG.app.releases_url})"
         f" to see what changed in v{__version__}."
@@ -257,7 +276,7 @@ implications of different policy scenarios.
    time you want to revisit the analysis.
 
  - **Generate a report:** Once you've run a simulation, save the results page as a PDF
-   to share directly with stakeholders.{_releases_line}
+   to share directly with stakeholders.{_docs_line}{_releases_line}
 
 ### A note on interpretation
 
