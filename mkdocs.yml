@@ -31,6 +31,16 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
+# Versions are published by scripts/deploy_docs.sh with mike: one folder per release,
+# `latest` (where /docs/ lands) and `dev` (main). Pages that are not the latest
+# release or dev show a banner pointing to the latest.
+extra:
+  version:
+    provider: mike
+    default:
+      - latest
+      - dev
+
 markdown_extensions:
   - admonition
   - attr_list

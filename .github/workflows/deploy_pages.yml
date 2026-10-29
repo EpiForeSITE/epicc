@@ -3,13 +3,18 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # A release publishes its documentation as a version (docs/<version>/).
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # scripts/deploy_docs.sh pushes the docs-versions branch.
+  contents: write
   pages: write
   id-token: write
 
+# Also serializes a release's two runs (the push to main and the tag push), which
+# both commit to the docs-versions branch.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -18,18 +23,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # The app is always built from main, even in a tag's run; the tag's own
+      # documentation is checked out separately below. Full history for the tags.
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
-      # The documentation, published under /docs/ beside the app. Built first, on the
-      # runner: the container below writes dist/ as root.
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Build the documentation website
+      # Each push adds or replaces one version on the docs-versions branch, which
+      # keeps every version published so far. Built on the runner, before the
+      # container below writes dist/ as root.
+      - name: Publish this push's documentation version
+        env:
+          PUSH: "true"
         run: |
-          uv sync --frozen --group docs
-          make docs DOCS_OUT=dist/docs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            git worktree add "$RUNNER_TEMP/release" "$GITHUB_REF_NAME"
+            cd "$RUNNER_TEMP/release"
+            scripts/deploy_docs.sh release
+          else
+            scripts/deploy_docs.sh main
+          fi
+
+      - name: Collect every published version under /docs/
+        run: |
+          git fetch origin docs-versions
+          mkdir -p dist/docs
+          git archive origin/docs-versions | tar -x -C dist/docs
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

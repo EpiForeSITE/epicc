@@ -29,6 +29,8 @@ dev = [
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.7.0",
+    # Publishes each release's documentation as its own version (docs/1.1.0/, ...).
+    "mike>=2.2.0",
 ]
 
 [tool.pytest.ini_options]

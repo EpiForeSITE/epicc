@@ -22,7 +22,8 @@ class AppConfig(BaseModel):
         default=None,
         description=(
             "Link to the documentation website, shown in the header and the app menu. "
-            "Not versioned: every version of the app points at the current docs."
+            "'{version}' is replaced with the running version, so each release links "
+            "to the documentation of the models it ships."
         ),
     )
 
