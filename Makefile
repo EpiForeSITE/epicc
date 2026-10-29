@@ -7,6 +7,7 @@ BUMP ?= patch
 APP_PY := app.py
 SOURCE := src/epicc
 DIST_DIR := dist
+DOCS_OUT ?= site
 
 .DEFAULT_GOAL := help
 
@@ -56,7 +57,7 @@ check: lint typecheck test ## Run all quality checks
 .PHONY: docs
 docs: ## Build the documentation website into site/ (strict: broken links fail)
 	$(UV) run --group docs scripts/build_model_docs.py
-	$(UV) run --group docs -m mkdocs build --strict
+	$(UV) run --group docs -m mkdocs build --strict --site-dir $(DOCS_OUT)
 
 .PHONY: docs-serve
 docs-serve: ## Serve the documentation website with live reload
