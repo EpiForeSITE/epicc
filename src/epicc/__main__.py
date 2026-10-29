@@ -52,10 +52,15 @@ from epicc.ui.url_params import (
     write_url_state,
 )
 
+# Each version links to its own documentation (docs/<version>/).
+_DOCS_URL = (
+    CONFIG.app.docs_url.replace("{version}", __version__) if CONFIG.app.docs_url else None
+)
+
 st.set_page_config(
     page_title=CONFIG.app.title,
     layout="wide",
-    menu_items={"Get help": CONFIG.app.docs_url} if CONFIG.app.docs_url else None,
+    menu_items={"Get help": _DOCS_URL} if _DOCS_URL else None,
 )
 load_styles(CONFIG.brand)
 initialize_state()
@@ -188,7 +193,7 @@ render_brand_header(
     CONFIG.brand,
     CONFIG.app.title,
     version=__version__,
-    docs_url=CONFIG.app.docs_url,
+    docs_url=_DOCS_URL,
     container=hdr_title,
 )
 
@@ -234,9 +239,9 @@ if selected_label is None:
         st.stop()
 
     _docs_line = (
-        f"\n - **Read the documentation:** The [EPICC documentation]({CONFIG.app.docs_url})"
+        f"\n - **Read the documentation:** The [EPICC documentation]({_DOCS_URL})"
         " explains every model, its parameters and their sources."
-        if CONFIG.app.docs_url
+        if _DOCS_URL
         else ""
     )
     _releases_line = (

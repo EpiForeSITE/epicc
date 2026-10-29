@@ -147,6 +147,10 @@ ensure development dependencies are present:
    the model file or the generator instead.
 - `make docs` builds the site in strict mode (broken links and missing pages fail), as
    the `docs` job in `.github/workflows/on_pr.yml` does on every pull request.
+- The site is versioned with mike: `scripts/deploy_docs.sh` publishes `dev` on pushes
+   to `main` and `<version>` plus `latest` on `v*` tags, to the `docs-versions` branch
+   (the published history; never edit it by hand). The app links to
+   `docs/<its version>/` through `app.docs_url`.
 
 ---
 

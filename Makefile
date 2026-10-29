@@ -55,14 +55,16 @@ test: ## Run pytest
 check: lint typecheck test ## Run all quality checks
 
 .PHONY: docs
-docs: ## Build the documentation website into site/ (strict: broken links fail)
-	$(UV) run --group docs scripts/build_model_docs.py
+docs: docs-generate ## Build the documentation website into site/ (strict: broken links fail)
 	$(UV) run --group docs -m mkdocs build --strict --site-dir $(DOCS_OUT)
 
 .PHONY: docs-serve
-docs-serve: ## Serve the documentation website with live reload
-	$(UV) run --group docs scripts/build_model_docs.py
+docs-serve: docs-generate ## Serve the documentation website with live reload
 	$(UV) run --group docs -m mkdocs serve
+
+.PHONY: docs-generate
+docs-generate: ## Generate the documentation pages built from code (the model pages)
+	$(UV) run --group docs scripts/build_model_docs.py
 
 .PHONY: bump
 bump: ## Cut a release (make bump BUMP=minor, or make bump VERSION=1.2.3)

@@ -51,3 +51,24 @@ jobs:
 
       - name: Build the documentation website
         run: make docs
+
+      # The publishing script the Pages workflow runs, against a local branch that is
+      # never pushed: a push to main, then a release, must leave dev, the release
+      # under `latest`, and /docs/ pointing at it.
+      - name: Publish the docs versions locally and check them
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/deploy_docs.sh main
+          scripts/deploy_docs.sh release
+          version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/epicc/__init__.py)"
+          git show docs-versions:versions.json | VERSION="$version" python3 -c '
+          import json, os, sys
+          versions = {v["version"]: v for v in json.load(sys.stdin)}
+          release = versions[os.environ["VERSION"]]
+          assert "dev" in versions, versions
+          assert release["aliases"] == ["latest"], release
+          assert release["title"] == os.environ["VERSION"], release
+          '
+          git show docs-versions:index.html | grep -q 'latest/'
+          git show "docs-versions:$version/models/index.html" > /dev/null
