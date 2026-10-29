@@ -204,7 +204,7 @@ wheels = [
 
 [[package]]
 name = "epicc"
-version = "1.0.3"
+version = "1.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "kaleido" },
