@@ -125,11 +125,28 @@ Use `uv` for dependency and command execution.
    - `make build`
 - Serve static bundle locally:
    - `make serve`
+- Build the documentation website (strict):
+   - `make docs` (`make docs-serve` for live reload)
 
 If you are in a devcontainer or CI environment intended to mirror local contributor setup,
 ensure development dependencies are present:
 
 - `uv sync --frozen --group dev --no-install-project`
+
+---
+
+## Documentation website
+
+- The site is built with MkDocs (Material theme) from `mkdocs.yml` and the Markdown in
+   `docs/`, and published by `.github/workflows/deploy_pages.yml` under `/docs/`, beside
+   the app at the site root. Its tools are in the `docs` dependency group.
+- Document user-facing behavior there, not in the README; the README links to it.
+   Add a page to `docs/` and list it under `nav` in `mkdocs.yml`.
+- Model pages are generated from the model YAML by `scripts/build_model_docs.py` into
+   `docs/models/`, which is git-ignored. Never commit generated documentation: improve
+   the model file or the generator instead.
+- `make docs` builds the site in strict mode (broken links and missing pages fail), as
+   the `docs` job in `.github/workflows/on_pr.yml` does on every pull request.
 
 ---
 

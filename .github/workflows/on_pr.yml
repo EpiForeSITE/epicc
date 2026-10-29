@@ -36,3 +36,18 @@ jobs:
             -w /workspaces/${{ github.event.repository.name }} \
             epicc:local \
             sh -c "uv sync --frozen && make check"
+
+  # The documentation website, built in strict mode: a broken link, a missing page or a
+  # model that no longer renders fails the check.
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build the documentation website
+        run: make docs

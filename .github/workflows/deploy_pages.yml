@@ -21,6 +21,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The documentation, published under /docs/ beside the app. Built first, on the
+      # runner: the container below writes dist/ as root.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build the documentation website
+        run: |
+          uv sync --frozen --group docs
+          uv run scripts/build_model_docs.py
+          uv run -m mkdocs build --strict --site-dir dist/docs
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

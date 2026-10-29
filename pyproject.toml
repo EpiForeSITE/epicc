@@ -25,6 +25,12 @@ dev = [
     "playwright>=1.58.0",
 ]
 
+# The documentation website (mkdocs.yml, docs/). Not needed to run or test EPICC.
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.0",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "scripts"]
 

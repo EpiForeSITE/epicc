@@ -12,3 +12,7 @@ __pycache__/
 *.py[cod]
 build/
 dist/
+
+# Documentation website: the build output, and the model pages generated into docs/.
+site/
+docs/models/

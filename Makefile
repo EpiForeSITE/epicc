@@ -53,6 +53,16 @@ test: ## Run pytest
 .PHONY: check
 check: lint typecheck test ## Run all quality checks
 
+.PHONY: docs
+docs: ## Build the documentation website into site/ (strict: broken links fail)
+	$(UV) run --group docs scripts/build_model_docs.py
+	$(UV) run --group docs -m mkdocs build --strict
+
+.PHONY: docs-serve
+docs-serve: ## Serve the documentation website with live reload
+	$(UV) run --group docs scripts/build_model_docs.py
+	$(UV) run --group docs -m mkdocs serve
+
 .PHONY: bump
 bump: ## Cut a release (make bump BUMP=minor, or make bump VERSION=1.2.3)
 	$(UV) run scripts/bump_version.py $(if $(VERSION),$(VERSION),$(BUMP))
